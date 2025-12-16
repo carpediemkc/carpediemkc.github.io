@@ -60,8 +60,16 @@
             0%, 100% { transform: translateY(0); }
             50% { transform: translateY(-20px); }
         }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+            20%, 40%, 60%, 80% { transform: translateX(4px); }
+        }
         .animate-pulse-slow {
             animation: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        .animate-shake {
+            animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
         }
     </style>
 </head>
@@ -189,6 +197,14 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
         );
 
+        const LockIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+        );
+
+        const UnlockIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 9.9-1" /></svg>
+        );
+
         // --- API Config ---
         const COINGECKO_IDS = {
             bitcoin: 'bitcoin',
@@ -308,6 +324,99 @@
                             animationDelay: `-${p.delay}s`,
                         }} />
                     ))}
+                </div>
+            );
+        };
+
+        // --- NEW: LockScreen Component (Updated for Security & Stability) ---
+        // Obfuscated check for '' to avoid plain text in source
+        // Using Base64 (btoa) for maximum compatibility across all environments (file://, http, https)
+        // '' -> Base64 -> 'MTU3MzkyMQ=='
+        const TARGET_SECRET = "MTU3MzkyMQ==";
+
+        const LockScreen = ({ onUnlock }) => {
+            const [password, setPassword] = useState('');
+            const [error, setError] = useState(false);
+            const [shake, setShake] = useState(false);
+
+            const handleUnlock = () => {
+                try {
+                    // Encode input to Base64 and compare
+                    if (btoa(password) === TARGET_SECRET) {
+                        onUnlock();
+                    } else {
+                        throw new Error('Incorrect password');
+                    }
+                } catch (e) {
+                    setError(true);
+                    setShake(true);
+                    setTimeout(() => setShake(false), 500);
+                }
+            };
+
+            return (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#050511] text-white">
+                    <BackgroundEffect />
+                    
+                    {/* Main Card Container with Glow */}
+                    <div className={`relative z-10 w-full max-w-md p-10 bg-[#0A0A1F]/40 backdrop-blur-xl border border-white/10 rounded-[2.5rem] shadow-[0_0_80px_rgba(0,0,0,0.8)] flex flex-col items-center gap-8 ${shake ? 'animate-shake' : ''} overflow-hidden group`}>
+                        
+                        {/* Subtle gradient background inside card */}
+                        <div className="absolute inset-0 bg-gradient-to-b from-white/5 to-transparent pointer-events-none" />
+                        
+                        {/* Top decorative line */}
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-1/3 h-1 bg-gradient-to-r from-transparent via-cyan-500 to-transparent opacity-50" />
+
+                        {/* Icon with pulsing glow */}
+                        <div className="relative mt-2">
+                            <div className="absolute -inset-4 bg-cyan-500/20 rounded-full blur-xl animate-pulse-slow"></div>
+                            <div className="relative p-5 rounded-2xl bg-[#13132B] border border-white/10 shadow-inner flex items-center justify-center">
+                                <LockIcon className="w-8 h-8 text-cyan-400 drop-shadow-[0_0_5px_rgba(34,211,238,0.8)]" />
+                            </div>
+                        </div>
+                        
+                        {/* Text Section */}
+                        <div className="text-center relative z-10 space-y-2">
+                            <h1 className="text-3xl font-black tracking-tight">
+                                <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 drop-shadow-sm">
+                                    Felix 资产总览
+                                </span>
+                            </h1>
+                            <p className="text-slate-500 text-xs font-mono tracking-[0.2em] uppercase">Private Wealth Management</p>
+                        </div>
+
+                        {/* Inputs */}
+                        <div className="w-full space-y-4 relative z-10">
+                            <div className="relative">
+                                <input 
+                                    type="password" 
+                                    value={password}
+                                    onChange={(e) => { setPassword(e.target.value); setError(false); }}
+                                    placeholder="Enter Access Code"
+                                    className={`w-full bg-[#050511]/60 border ${error ? 'border-red-500/50 text-red-400' : 'border-white/10 text-white focus:border-cyan-500/50'} rounded-2xl px-4 py-4 text-center text-lg tracking-[0.3em] placeholder:text-slate-700 placeholder:tracking-normal placeholder:text-sm focus:outline-none focus:ring-1 focus:ring-cyan-500/50 transition-all duration-300 shadow-inner`}
+                                    autoFocus
+                                    onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
+                                />
+                                {error && (
+                                    <div className="absolute right-4 top-1/2 -translate-y-1/2 text-red-500">
+                                        <XIcon className="w-4 h-4" />
+                                    </div>
+                                )}
+                            </div>
+                            
+                            <button 
+                                onClick={handleUnlock}
+                                className="w-full bg-gradient-to-r from-cyan-600 via-blue-600 to-purple-600 hover:from-cyan-500 hover:via-blue-500 hover:to-purple-500 text-white font-bold py-4 rounded-2xl shadow-lg shadow-blue-900/30 hover:shadow-cyan-500/20 transition-all duration-300 active:scale-[0.98] flex items-center justify-center gap-2 overflow-hidden relative group/btn"
+                            >
+                                <span className="relative z-10 tracking-widest text-sm">GO！！！</span>
+                                <UnlockIcon className="w-4 h-4 relative z-10 group-hover/btn:rotate-12 transition-transform" />
+                            </button>
+                        </div>
+
+                        <div className="text-[10px] text-slate-700 font-mono relative z-10 hover:text-slate-600 transition-colors">
+                           ID:  | Secure Enclave
+                        </div>
+                    </div>
                 </div>
             );
         };
@@ -799,8 +908,8 @@
 
         const InvestmentPlanView = ({ onBack, totalAssets }) => {
             const plans = [
-                { id: 1, title: '定期定投 (DCA)', status: 'Active', desc: '每月定投￥2000', icon: RefreshCwIcon, color: '#10b981', type: 'Strategy' },
-                { id: 2, title: '核心-卫星策略', status: 'Active', desc: '核心持有 (BTC/ETH/Stock)+卫星博弈 (Meme/Alts)', icon: ActivityIcon, color: '#3b82f6', type: 'Allocation' },
+                { id: 1, title: '定期定投 (DCA)', status: 'Active', desc: '每月逢低主动定投￥2,000', icon: RefreshCwIcon, color: '#10b981', type: 'Strategy' },
+                { id: 2, title: '核心-卫星策略', status: 'Active', desc: '核心持有 (BTC/ETH/Stock), 卫星博弈 (Meme/Alts)', icon: ActivityIcon, color: '#3b82f6', type: 'Allocation' },
                 { id: 3, title: '现金流管理', status: 'Review', desc: '确保预留 12 个月生活备用金', icon: CashLogo, color: '#f59e0b', type: 'Risk' },
             ];
 
@@ -916,7 +1025,7 @@
                                                                 type="number" 
                                                                 value={dcaInput}
                                                                 onChange={(e) => setDcaInput(e.target.value)}
-                                                                placeholder="输入本月已投金额..."
+                                                                placeholder="输入本月已投金额..." 
                                                                 className="bg-[#0A0A1F] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white flex-1 focus:outline-none focus:border-emerald-500 transition-colors"
                                                                 onKeyDown={(e) => e.key === 'Enter' && handleUpdateDca()}
                                                                 autoFocus
@@ -988,6 +1097,7 @@
         };
 
         const App = () => {
+            const [isAuthenticated, setIsAuthenticated] = useState(false);
             const [currentView, setCurrentView] = useState('home');
             const [isOnline, setIsOnline] = useState(true);
             const [portfolios, setPortfolios] = useState({
@@ -1100,6 +1210,11 @@
                 { id: 'others', title: '其他资产', value: calculateTotal(portfolios.others), change: calculatePortfolioChange(portfolios.others), icon: GoldLogo, color: '#f59e0b', desc: '待报销, 购物卡' },
             ], [portfolios]);
 
+            // Authentication Guard
+            if (!isAuthenticated) {
+                return <LockScreen onUnlock={() => setIsAuthenticated(true)} />;
+            }
+
             if (currentView === 'realtime-market') return <RealTimeMarket portfolios={portfolios} onBack={() => setCurrentView('home')} />;
             if (currentView === 'investment-plan') return <InvestmentPlanView onBack={() => setCurrentView('home')} totalAssets={totalAssets} />;
             
@@ -1158,6 +1273,12 @@
                                 </div>
                             </div>
                         </header>
+                        {/* New Top Action Bar */}
+                        <div className="absolute top-0 right-0 flex items-center gap-3 p-4">
+                            <button onClick={() => setIsAuthenticated(false)} className="p-3 bg-rose-500/20 hover:bg-rose-500/40 rounded-xl border border-rose-500/30 transition-colors group backdrop-blur-sm" title="锁定">
+                                <LockIcon className="w-5 h-5 text-rose-400 group-hover:text-rose-200" />
+                            </button>
+                        </div>
                         <div className="space-y-4">
                             <div className="flex justify-start gap-4 flex-wrap">
                                 <button onClick={() => setCurrentView('realtime-market')} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white rounded-xl shadow-lg shadow-cyan-500/20 transition-all hover:scale-105 font-bold text-sm">
