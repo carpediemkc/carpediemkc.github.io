@@ -1,0 +1,1210 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Felix Family Office Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <!-- Prop Types (Required for Recharts UMD) -->
+    <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
+    
+    <!-- Recharts (Chart Library) -->
+    <script src="https://unpkg.com/recharts@2.12.7/umd/Recharts.js"></script>
+
+    <style>
+        /* Custom Scrollbar */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 5px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Hide number input spin buttons (arrows) */
+        input[type=number]::-webkit-inner-spin-button, 
+        input[type=number]::-webkit-outer-spin-button { 
+            -webkit-appearance: none; 
+            margin: 0; 
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+
+        /* Animations */
+        @keyframes pan {
+            0% { background-position: 0% 0%; }
+            100% { background-position: 100% 100%; }
+        }
+        @keyframes pulse-slow {
+            0%, 100% { opacity: 0.3; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(1.1); }
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-20px); }
+        }
+        .animate-pulse-slow {
+            animation: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+    </style>
+</head>
+<body class="bg-[#050511] text-white">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        // 1. Remove imports and destructure from global objects
+        const { useState, useMemo, useRef, useEffect } = React;
+        const { PieChart, Pie, Cell, ResponsiveContainer, Tooltip: RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, LabelList, Sector, LineChart, Line, AreaChart, Area, Legend } = window.Recharts;
+
+        // --- Safe Icons (Manually Defined for Browser Environment) ---
+
+        // 1. Image Logos
+        const BitcoinLogo = (props) => (
+            <img src="https://cryptologos.cc/logos/bitcoin-btc-logo.svg?v=035" alt="Bitcoin" {...props} />
+        );
+
+        const CashLogo = (props) => (
+            <img src="https://s1.aigei.com/src/img/png/c1/c1c58f9f81204e81858b07ba838e6f79.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:Bhn0W9ek2wCZM4OiyJ8VhVdloqM=" alt="Cash" {...props} />
+        );
+
+        const UsStocksLogo = (props) => (
+            <img src="https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.5.0/flags/1x1/us.svg" alt="US Stocks" {...props} />
+        );
+
+        const ASharesLogo = (props) => (
+            <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Flag_of_the_People%27s_Republic_of_China.svg/256px-Flag_of_the_People%27s_Republic_of_China.svg.png" alt="A-Shares" {...props} />
+        );
+
+        const GoldLogo = (props) => (
+            <img src="https://cdn-icons-png.flaticon.com/128/7880/7880066.png" alt="Gold Coin" {...props} />
+        );
+
+        // 2. SVG Icons
+        const ZapIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+        );
+
+        const SparklesIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /><path d="M5 3v4" /><path d="M9 17v4" /><path d="M3 21h4" /></svg>
+        );
+
+        const Loader2Icon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+        );
+
+        const XIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M18 6 6 18" /><path d="m6 6 12 12" /></svg>
+        );
+
+        const MoveIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="5 9 2 12 5 15" /><polyline points="9 5 12 2 15 5" /><polyline points="15 19 12 22 9 19" /><polyline points="19 9 22 12 19 15" /><line x1="2" x2="22" y1="12" y2="12" /><line x1="12" x2="12" y1="2" y2="22" /></svg>
+        );
+
+        const WifiIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M5 12.55a11 11 0 0 1 14.08 0" /><path d="M1.42 9a16 16 0 0 1 21.16 0" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" x2="12.01" y1="20" y2="20" /></svg>
+        );
+
+        const WifiOffIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><line x1="1" x2="23" y1="1" y2="23" /><path d="M16.72 11.06A10.94 10.94 0 0 1 19 12.55" /><path d="M5 12.55a10.94 10.94 0 0 1 5.17-2.39" /><path d="M10.71 5.05A16 16 0 0 1 22.58 9" /><path d="M1.42 9a15.91 15.91 0 0 1 4.7-2.88" /><path d="M8.53 16.11a6 6 0 0 1 6.95 0" /><line x1="12" x2="12.01" y1="20" y2="20" /></svg>
+        );
+
+        const BriefcaseIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect width="20" height="14" x="2" y="7" rx="2" ry="2" /><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" /></svg>
+        );
+
+        const CalendarIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect width="18" height="18" x="3" y="4" rx="2" ry="2" /><line x1="16" x2="16" y1="2" y2="6" /><line x1="8" x2="8" y1="2" y2="6" /><line x1="3" x2="21" y1="10" y2="10" /></svg>
+        );
+
+        const Maximize2Icon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="15 3 21 3 21 9" /><polyline points="9 21 3 21 3 15" /><line x1="21" x2="14" y1="3" y2="10" /><line x1="3" x2="10" y1="21" y2="14" /></svg>
+        );
+
+        const Minimize2Icon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="4 14 10 14 10 20" /><polyline points="20 10 14 10 14 4" /><line x1="14" x2="21" y1="10" y2="3" /><line x1="3" x2="10" y1="21" y2="14" /></svg>
+        );
+
+        const ArrowLeftIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m12 19-7-7 7-7" /><path d="M19 12H5" /></svg>
+        );
+
+        const ActivityIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M22 12h-4l-3 9L9 3l-3 9H2" /></svg>
+        );
+
+        const TrendingUpIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></svg>
+        );
+
+        const LayersIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polygon points="12 2 2 7 12 12 22 7 12 2" /><polyline points="2 17 12 22 22 17" /><polyline points="2 12 12 17 22 12" /></svg>
+        );
+
+        const RefreshCwIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8" /><path d="M21 3v5h-5" /><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16" /><path d="M8 16H3v5" /></svg>
+        );
+
+        const TrendingDownIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><polyline points="23 18 13.5 8.5 8.5 13.5 1 6" /><polyline points="17 18 23 18 23 12" /></svg>
+        );
+
+        const BarChart2Icon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><line x1="18" x2="18" y1="20" y2="10" /><line x1="12" x2="12" y1="20" y2="4" /><line x1="6" x2="6" y1="20" y2="14" /></svg>
+        );
+
+        const PieChartIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M21.21 15.89A10 10 0 1 1 8 2.83" /><path d="M22 12A10 10 0 0 0 12 2v10z" /></svg>
+        );
+
+        const TargetIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></svg>
+        );
+
+        const ClipboardList = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="3" y="5" width="6" height="6" rx="1" /><path d="m3 17 2 2 4-4" /><path d="M13 6h8" /><path d="M13 12h8" /><path d="M13 18h8" /></svg>
+        );
+
+        const CheckCircleIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>
+        );
+
+        const TrashIcon = (props) => (
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
+        );
+
+        // --- API Config ---
+        const COINGECKO_IDS = {
+            bitcoin: 'bitcoin',
+            ethereum: 'ethereum',
+            solana: 'solana',
+            cardano: 'cardano',
+            dogecoin: 'dogecoin',
+            tether: 'tether',
+            dai: 'dai',
+            paxg: 'pax-gold',
+        };
+
+        const INITIAL_FELIX_DATA = [
+            { id: 'bitcoin', name: 'BTC', amount: 0.01273, basePrice: 475000, symbol: 'BTC', color: '#F7931A', logo: 'https://cryptologos.cc/logos/bitcoin-btc-logo.svg?v=035' },
+            { id: 'ethereum', name: 'ETH', amount: 1.1441, basePrice: 25000, symbol: 'ETH', color: '#627EEA', logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg?v=035' },
+            { id: 'solana', name: 'SOL', amount: 3.2112, basePrice: 1000, symbol: 'SOL', color: '#A100A1', logo: 'https://cryptologos.cc/logos/solana-sol-logo.svg?v=035' },
+            { id: 'cardano', name: 'ADA', amount: 10074.11, basePrice: 5, symbol: 'ADA', color: '#0033AD', logo: 'https://cryptologos.cc/logos/cardano-ada-logo.svg?v=035' },
+            { id: 'dogecoin', name: 'DOGE', amount: 10000.76, basePrice: 1.5, symbol: 'DOGE', color: '#C2A633', logo: 'https://cryptologos.cc/logos/dogecoin-doge-logo.svg?v=035' },
+            { id: 'tether', name: 'USDT', amount: 965.65, basePrice: 7.2, symbol: 'USDT', color: '#26A17B', logo: 'https://cryptologos.cc/logos/tether-usdt-logo.svg?v=035' },
+        ];
+
+        const INITIAL_JIAMIN_DATA = [
+            { id: 'cardano', name: 'ADA', amount: 6651.01, basePrice: 5, symbol: 'ADA', color: '#0033AD', logo: 'https://cryptologos.cc/logos/cardano-ada-logo.svg?v=035' },
+            { id: 'ethereum', name: 'ETH', amount: 0.65490133, basePrice: 25000, symbol: 'ETH', color: '#627EEA', logo: 'https://cryptologos.cc/logos/ethereum-eth-logo.svg?v=035' },
+            { id: 'dogecoin', name: 'DOGE', amount: 10021.54404956, basePrice: 1.5, symbol: 'DOGE', color: '#C2A633', logo: 'https://cryptologos.cc/logos/dogecoin-doge-logo.svg?v=035' },
+            { id: 'solana', name: 'SOL', amount: 9.028480971, basePrice: 1000, symbol: 'SOL', color: '#A100A1', logo: 'https://cryptologos.cc/logos/solana-sol-logo.svg?v=035' },
+            { id: 'bitcoin', name: 'BTC', amount: 0.00881658, basePrice: 475000, symbol: 'BTC', color: '#F7931A', logo: 'https://cryptologos.cc/logos/bitcoin-btc-logo.svg?v=035' },
+            { id: 'tether', name: 'USDT', amount: 619.41023794, basePrice: 7.2, symbol: 'USDT', color: '#26A17B', logo: 'https://cryptologos.cc/logos/tether-usdt-logo.svg?v=035' },
+            { id: 'dai', name: 'DAI', amount: 1341.96, basePrice: 7.2, symbol: 'DAI', color: '#F5A623', logo: 'https://cryptologos.cc/logos/multi-collateral-dai-dai-logo.svg?v=040' },
+            { id: 'wkey', name: 'Wkey', amount: 14.748, basePrice: 71.53635, priceUsd: 9.93, symbol: 'wkeydao', color: '#E60012', logo: 'https://coinstats.app/_next/image/?url=https%3A%2F%2Fstatic.coinstats.app%2Fcoins%2F0x194b302a4b0a79795fb68e2adf1b8c9ec5ff8d1f_binance_smartBTe.png&w=48&q=75' },
+        ];
+
+        const INITIAL_CASH_DATA = [
+            { id: 'alipay', name: '支付宝', amount: 1, basePrice: 27610.82, symbol: 'CNY', color: '#1677FF', logo: 'https://s1.aigei.com/src/img/png/0b/0bcbe42f3a244cbbbd9bbebaaeb302dc.png?e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:64Tt4i2gUkKq0FuKat5bEiXgjZI=' },
+            { id: 'wechat', name: '微信', amount: 1, basePrice: 25306.35, symbol: 'CNY', color: '#07C160', logo: 'https://s1.aigei.com/src/img/png/3a/3a7129ff6cc743e9abd1d5a1f0ec59a4.png?e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:R-MbUpUiBkZ6vZXL-jkbK-E1ToQ=' },
+            { id: 'icbc', name: '工商银行', amount: 1, basePrice: 36.86, symbol: 'CNY', color: '#E60012', logo: 'https://s1.aigei.com/src/img/png/7a/7a6954db06cb4bcd82d12ee5e4455604.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:iZU9OoeHue7hOne3LcpBYoPh9pk=' },
+            { id: 'spdb', name: '浦发银行', amount: 1, basePrice: 126.02, symbol: 'CNY', color: '#002E72', logo: 'https://s1.chu0.com/src/img/png/d6/d669186eea504af0a6eb777ee1680f34.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=1srnZGLKZ0Aqlz6dk7yF4SkiYf4eP-YrEOdM1sob:mLGEifEYYTHd4pVjl6QOgPIBHqE=' },
+            { id: 'cmb', name: '招商银行', amount: 1, basePrice: 256.22, symbol: 'CNY', color: '#C8102E', logo: 'https://s1.aigei.com/src/img/png/4a/4a74d8bada95492084d9bc526ee3bf6a.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:I_ZejTXw-KWvrlW005bHAaB_CT0=' },
+        ];
+
+        const INITIAL_US_STOCKS_DATA = [
+            { id: 'circle', name: 'Circle', amount: 10, basePrice: 621.76, priceUsd: 83.47, symbol: '股', color: '#2775CA', logo: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.svg?v=035' },
+            { id: 'cash', name: '现金', amount: 133, basePrice: 5.43, symbol: '新币', color: '#3CB89C', logo: 'https://s1.aigei.com/src/img/png/c1/c1c58f9f81204e81858b07ba838e6f79.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:Bhn0W9ek2wCZM4OiyJ8VhVdloqM=' },
+        ];
+
+        const INITIAL_A_SHARES_DATA = [
+            { id: 'hs300', name: '沪深300', amount: 1100, basePrice: 4.678, symbol: '股', color: '#E74C3C', logo: 'https://s1.aigei.com/src/img/png/22/226369d783aa477e9a909ef82b43c436.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:KYs1RMN8U19vsY6lZtpiA2YSDus=' },
+            { id: 'military', name: '军工ETF', amount: 5100, basePrice: 1.227, symbol: '股', color: '#3498DB', logo: 'https://s1.aigei.com/src/img/png/22/226369d783aa477e9a909ef82b43c436.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:KYs1RMN8U19vsY6lZtpiA2YSDus=' },
+            { id: 'cash', name: '现金', amount: 1586.63, basePrice: 1, symbol: '元', color: '#3CB89C', logo: 'https://s1.aigei.com/src/img/png/c1/c1c58f9f81204e81858b07ba838e6f79.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:Bhn0W9ek2wCZM4OiyJ8VhVdloqM=' },
+        ];
+
+        const INITIAL_OTHERS_DATA = [
+            { id: 'coffee', name: '瑞幸咖啡', amount: 37.46, basePrice: 1, symbol: '元', color: '#002D9E', logo: 'https://s1.aigei.com/src/img/png/7a/7a2afbb721f04840a7bdf88aee69811d.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:BhU4Xo_UmUFRqBu0UsWApRT2wGE=' },
+            { id: 'baoxiao', name: '待报销', amount: 3865.43, basePrice: 1, symbol: '元', color: '#3CB89C', logo: 'https://s1.aigei.com/src/img/png/c1/c1c58f9f81204e81858b07ba838e6f79.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:Bhn0W9ek2wCZM4OiyJ8VhVdloqM=' },
+            { id: 'clubgg', name: 'ClubGG', amount: 41.37, basePrice: 7.02, symbol: '美元', color: '#E74C3C', logo: 'https://www.bing.com/th/id/OIP.iDSLMNV-Cx9ZSVUYzwXR3wAAAA?w=181&h=180&c=7&r=0&o=7&cb=ucfimgc2&pid=1.7&rm=3' },
+        ];
+
+        const calculateTotal = (data) => data.reduce((acc, item) => acc + (item.amount * item.basePrice), 0);
+
+        const CurrencyFormatter = ({ value, className = "", symbol = "¥" }) => {
+            const prevValue = useRef(value);
+            const [flashColor, setFlashColor] = useState(null);
+
+            useEffect(() => {
+                if (value > prevValue.current) {
+                    setFlashColor('text-emerald-400');
+                } else if (value < prevValue.current) {
+                    setFlashColor('text-rose-400');
+                }
+                prevValue.current = value;
+
+                const timer = setTimeout(() => setFlashColor(null), 1000);
+                return () => clearTimeout(timer);
+            }, [value]);
+
+            return (
+                <span className={`font-mono tracking-wider transition-colors duration-500 ${flashColor || ''} ${className}`}>
+                    {symbol}{value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+            );
+        };
+
+        const BackgroundEffect = () => {
+            const particles = useMemo(() => {
+                return [...Array(15)].map((_, i) => ({
+                    id: i,
+                    left: Math.random() * 100,
+                    top: Math.random() * 100,
+                    size: Math.random() * 3 + 1,
+                    duration: Math.random() * 15 + 10,
+                    delay: Math.random() * 5,
+                }));
+            }, []);
+
+            return (
+                <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden bg-[#050511]">
+                    <div className="absolute inset-0 bg-gradient-to-b from-[#050511] via-[#0a0a25] to-[#050511]" />
+                    <div className="absolute inset-0 opacity-20" style={{
+                        backgroundImage: 'linear-gradient(rgba(6, 182, 212, 0.15) 1px, transparent 1px), linear-gradient(90deg, rgba(6, 182, 212, 0.15) 1px, transparent 1px)',
+                        backgroundSize: '50px 50px',
+                        maskImage: 'radial-gradient(ellipse at center, black 40%, transparent 80%)',
+                        WebkitMaskImage: 'radial-gradient(ellipse at center, black 40%, transparent 80%)',
+                        animation: 'pan 30s linear infinite',
+                        transformOrigin: 'center center',
+                        transform: 'perspective(500px) rotateX(10deg) scale(1.5)'
+                    }} />
+                    <div className="absolute top-[-10%] left-[-10%] w-[60vw] h-[60vw] bg-blue-600/10 rounded-full blur-[100px] animate-pulse-slow" />
+                    <div className="absolute bottom-[-10%] right-[-10%] w-[60vw] h-[60vw] bg-purple-600/10 rounded-full blur-[100px] animate-pulse-slow delay-1000" />
+                    <div className="absolute top-[40%] left-[50%] transform -translate-x-1/2 -translate-y-1/2 w-[40vw] h-[40vw] bg-cyan-500/5 rounded-full blur-[90px] animate-pulse-slow delay-2000" />
+                    {particles.map((p) => (
+                        <div key={p.id} className="absolute rounded-full bg-cyan-400/40 shadow-[0_0_8px_rgba(34,211,238,0.6)]" style={{
+                            left: `${p.left}%`,
+                            top: `${p.top}%`,
+                            width: `${p.size}px`,
+                            height: `${p.size}px`,
+                            animation: `float ${p.duration}s ease-in-out infinite`,
+                            animationDelay: `-${p.delay}s`,
+                        }} />
+                    ))}
+                </div>
+            );
+        };
+
+        const RealTimeMarket = ({ portfolios, onBack }) => {
+            const uniqueAssets = useMemo(() => {
+                const flatAssets = [
+                    ...portfolios.felix.map((a) => ({ ...a, type: 'Crypto' })),
+                    ...portfolios.jiamin.map((a) => ({ ...a, type: 'Crypto' })),
+                    ...portfolios.usStocks.map((a) => ({ ...a, type: 'US Stock' })),
+                    ...portfolios.aShares.map((a) => ({ ...a, type: 'A-Share' })),
+                ];
+                const seen = new Set();
+                return flatAssets.filter(asset => {
+                    if (asset.id === 'cash') return false;
+                    if (seen.has(asset.id)) return false;
+                    seen.add(asset.id);
+                    return true;
+                });
+            }, [portfolios]);
+
+            return (
+                <div className="min-h-screen text-white p-4 md:p-8 font-sans selection:bg-cyan-500 selection:text-black overflow-y-auto relative animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <BackgroundEffect />
+                    <div className="max-w-[1400px] mx-auto space-y-8 relative z-10">
+                        <div className="flex items-center justify-between pb-6 border-b border-cyan-500/20">
+                            <div className="flex items-center gap-4">
+                                <button onClick={onBack} className="flex items-center justify-center p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-cyan-500/20 hover:border-cyan-500/50 hover:text-cyan-400 transition-all group mr-2 backdrop-blur-sm" title="返回首页">
+                                    <ArrowLeftIcon className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                                </button>
+                                <div>
+                                    <h1 className="text-3xl md:text-4xl font-black text-white italic tracking-wide">
+                                        实时<span className="text-emerald-400">行情看板</span>
+                                    </h1>
+                                    <p className="text-slate-400 text-sm mt-1">Global Market Monitor</p>
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-slate-500 bg-white/5 px-3 py-1.5 rounded-full border border-white/5">
+                                <RefreshCwIcon className="w-3 h-3 animate-spin" style={{ animationDuration: '3s' }} />
+                                <span>Live Updates (20s)</span>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                            {uniqueAssets.map((asset, index) => {
+                                const change = asset.change24h || (Math.random() * 2 - 1);
+                                const isPositive = change >= 0;
+                                const isCrypto = asset.type === 'Crypto';
+                                const isStableCoin = ['tether', 'dai'].includes(asset.id);
+                                const showUsd = (isCrypto && !isStableCoin && asset.priceUsd) || (asset.priceUsd && asset.type === 'US Stock');
+                                const displayPrice = showUsd ? asset.priceUsd : asset.basePrice;
+                                const displaySymbol = showUsd ? '$' : '¥';
+                                const decimalPlaces = (showUsd && displayPrice < 1) ? 3 : 2;
+
+                                return (
+                                    <div key={`${asset.id}-${index}`} className="relative bg-[#0A0A1F]/60 backdrop-blur-md border border-white/10 rounded-xl p-5 hover:border-cyan-500/30 transition-all duration-300 group overflow-hidden">
+                                        <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity">
+                                            <TrendingUpIcon className="w-24 h-24" />
+                                        </div>
+                                        <div className="flex items-start justify-between relative z-10 mb-4">
+                                            <div className="flex items-center gap-3">
+                                                <div className="w-12 h-12 rounded-full bg-white/5 p-2 border border-white/10 flex items-center justify-center">
+                                                    <img src={asset.logo} alt={asset.name} className="w-full h-full object-contain" onError={(e) => e.target.style.display='none'} />
+                                                </div>
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-white">{asset.name}</h3>
+                                                    <div className="flex items-center gap-2 text-xs">
+                                                        <span className="text-slate-400 font-mono">{asset.symbol}</span>
+                                                        <span className="px-1.5 py-0.5 rounded bg-white/10 text-slate-300 text-[10px]">{asset.type}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className={`flex items-center gap-1 text-sm font-bold ${isPositive ? 'text-emerald-400' : 'text-rose-400'}`}>
+                                                {isPositive ? <TrendingUpIcon className="w-4 h-4" /> : <TrendingDownIcon className="w-4 h-4" />}
+                                                {Math.abs(change).toFixed(2)}%
+                                            </div>
+                                        </div>
+                                        <div className="space-y-2 relative z-10">
+                                            <div className="flex justify-between items-end">
+                                                <span className="text-slate-500 text-xs uppercase tracking-wider">Current Price</span>
+                                                <span className="text-3xl font-mono font-bold text-white tracking-tight">
+                                                    {displaySymbol}{displayPrice.toLocaleString(undefined, { minimumFractionDigits: decimalPlaces, maximumFractionDigits: decimalPlaces })}
+                                                </span>
+                                            </div>
+                                            <div className="w-full h-px bg-white/10" />
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const PortfolioDetail = ({ ownerName, categoryName = "加密资产", data, onBack, useOriginalOrder = false }) => {
+            const [activeIndex, setActiveIndex] = useState(null);
+            const [isFullscreen, setIsFullscreen] = useState(false);
+            const dashboardRef = useRef(null);
+            const [rotation, setRotation] = useState(0);
+            const [isDragging, setIsDragging] = useState(false);
+            const pieChartContainerRef = useRef(null);
+            const lastAngleRef = useRef(0);
+            const [showAIModal, setShowAIModal] = useState(false);
+            const [isAnalyzing, setIsAnalyzing] = useState(false);
+            const [aiAnalysis, setAiAnalysis] = useState(null);
+
+            const computedData = useMemo(() => {
+                return data.map(item => ({
+                    ...item,
+                    value: item.amount * item.basePrice
+                }));
+            }, [data]);
+
+            const totalValue = useMemo(() => computedData.reduce((acc, item) => acc + item.value, 0), [computedData]);
+
+            const sortedData = useMemo(() => {
+                return computedData.map(item => ({
+                    ...item,
+                    percentage: (item.value / totalValue) * 100
+                })).sort((a, b) => b.value - a.value);
+            }, [computedData, totalValue]);
+
+            const pieData = useMemo(() => {
+                if (useOriginalOrder) {
+                    return computedData.map(item => ({
+                        ...item,
+                        percentage: (item.value / totalValue) * 100
+                    }));
+                }
+                const sorted = [...sortedData];
+                const interleaved = [];
+                let left = 0;
+                let right = sorted.length - 1;
+                while (left <= right) {
+                    if (left === right) {
+                        interleaved.push(sorted[left]);
+                    } else {
+                        interleaved.push(sorted[left]);
+                        interleaved.push(sorted[right]);
+                    }
+                    left++;
+                    right--;
+                }
+                return interleaved;
+            }, [sortedData]);
+
+            const onPieEnter = (_, index) => setActiveIndex(index);
+            const onPieLeave = () => setActiveIndex(null);
+
+            const toggleFullscreen = async () => {
+                try {
+                    if (!document.fullscreenElement) {
+                        if (dashboardRef.current) {
+                            await dashboardRef.current.requestFullscreen();
+                            setIsFullscreen(true);
+                        }
+                    } else {
+                        await document.exitFullscreen();
+                        setIsFullscreen(false);
+                    }
+                } catch (err) {
+                    console.warn("Fullscreen toggle failed:", err);
+                }
+            };
+
+            useEffect(() => {
+                const handleFullscreenChange = () => setIsFullscreen(!!document.fullscreenElement);
+                document.addEventListener('fullscreenchange', handleFullscreenChange);
+                return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
+            }, []);
+
+            const getAngle = (clientX, clientY) => {
+                if (!pieChartContainerRef.current) return 0;
+                const rect = pieChartContainerRef.current.getBoundingClientRect();
+                const centerX = rect.left + rect.width / 2;
+                const centerY = rect.top + rect.height / 2;
+                return Math.atan2(clientY - centerY, clientX - centerX) * (180 / Math.PI);
+            };
+
+            const handleMouseDown = (e) => {
+                e.preventDefault();
+                setIsDragging(true);
+                lastAngleRef.current = getAngle(e.clientX, e.clientY);
+            };
+
+            const handleMouseMove = (e) => {
+                if (!isDragging) return;
+                const currentAngle = getAngle(e.clientX, e.clientY);
+                let delta = currentAngle - lastAngleRef.current;
+                if (delta > 180) delta -= 360;
+                if (delta < -180) delta += 360;
+                setRotation(prev => prev - delta);
+                lastAngleRef.current = currentAngle;
+            };
+
+            const handleMouseUp = () => setIsDragging(false);
+
+            const handleAIAnalyze = async () => {
+                setShowAIModal(true);
+                if (aiAnalysis) return;
+                setIsAnalyzing(true);
+                
+                // Simulate network delay for "thinking" effect
+                await new Promise(r => setTimeout(r, 1500));
+
+                try {
+                    // Local Analysis Logic (No API Key needed)
+                    // 1. Calculate Allocations
+                    const cryptoAssets = sortedData.filter(i => ['felix-crypto', 'jiamin-crypto', 'bitcoin', 'ethereum', 'solana', 'cardano', 'dogecoin', 'tether', 'dai', 'wkey'].some(k => i.id.includes(k) || i.name.includes('BTC') || i.name.includes('ETH')));
+                    const cryptoValue = cryptoAssets.reduce((acc, cur) => acc + cur.value, 0);
+                    const cryptoPct = (cryptoValue / totalValue) * 100;
+
+                    const cashAssets = sortedData.filter(i => i.id === 'cash' || i.name.includes('现金'));
+                    const cashValue = cashAssets.reduce((acc, cur) => acc + cur.value, 0);
+                    const cashPct = (cashValue / totalValue) * 100;
+
+                    const topAsset = sortedData[0];
+
+                    // 2. Generate Dynamic Text
+                    let healthScore = 0;
+                    let insights = "";
+                    let risks = "";
+                    let advice = "";
+
+                    // Score Logic
+                    if (cashPct >= 10 && cashPct <= 30) healthScore += 3; else healthScore += 1;
+                    if (cryptoPct < 60) healthScore += 3; else healthScore += 1; // Penalty for high crypto exposure
+                    if (sortedData.length > 4) healthScore += 4; else healthScore += 2;
+                    
+                    // Insight Logic
+                    insights = `当前组合中，**${topAsset.name}** 是第一大重仓，占比 **${topAsset.percentage.toFixed(1)}%**。`;
+                    if (cryptoPct > 50) {
+                        insights += ` 整体风格偏向**进取型**，加密资产占比高达 ${cryptoPct.toFixed(0)}%。`;
+                    } else {
+                        insights += ` 整体风格较为**稳健**。`;
+                    }
+
+                    // Risk Logic
+                    if (cryptoPct > 70) {
+                        risks = "⚠️ **集中度风险**：加密资产敞口过大，建议适当止盈并配置低风险资产。";
+                    } else if (cashPct < 5) {
+                        risks = "⚠️ **流动性风险**：现金储备不足 5%，应对突发状况能力较弱。";
+                    } else {
+                        risks = "✅ **风险可控**：目前的资产配置结构相对平衡。";
+                    }
+
+                    // Advice
+                    const quotes = [
+                        "投资不是为了打败市场，而是为了实现你的人生目标。",
+                        "在别人贪婪时恐惧，在别人恐惧时贪婪。",
+                        "复利是世界第八大奇迹。",
+                        "不要把所有鸡蛋放在同一个篮子里。"
+                    ];
+                    advice = `🚀 **投资寄语**: ${quotes[Math.floor(Math.random() * quotes.length)]}`;
+
+                    const analysisResult = `🤖 **AI 智能分析报告 (Local)**\n\n1. 📊 **资产健康度评分**: ${healthScore}/10。\n2. 💡 **配置洞察**: ${insights}\n3. ${risks}\n4. ${advice}`;
+
+                    setAiAnalysis(analysisResult);
+                } catch (error) {
+                    console.error("Analysis Error", error);
+                    setAiAnalysis("分析生成失败，请稍后重试。");
+                } finally {
+                    setIsAnalyzing(false);
+                }
+            };
+
+            const renderCustomizedLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, payload }) => {
+                const RADIAN = Math.PI / 180;
+                const radius = innerRadius + (outerRadius - innerRadius) * 2.4;
+                const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                if (percent < 0.01) return null;
+                const width = 220;
+                const height = 50;
+                return (
+                    <g style={{ filter: 'drop-shadow(0px 0px 4px rgba(0,0,0,0.5))', pointerEvents: 'none' }}>
+                        <path d={`M${cx + outerRadius * Math.cos(-midAngle * RADIAN)},${cy + outerRadius * Math.sin(-midAngle * RADIAN)}L${x},${y}`} stroke={payload.color} strokeWidth="2" fill="none" opacity="1" />
+                        <foreignObject x={x > cx ? x : x - width} y={y - height / 2} width={width} height={height} style={{ overflow: 'visible' }}>
+                            <div className={`w-full h-full flex items-center ${x > cx ? 'justify-start' : 'justify-end'}`}>
+                                <div className="flex items-center gap-2 bg-[#0A0A1F] border-2 rounded-lg px-3 py-1.5 shadow-xl transition-transform hover:scale-105" style={{ justifyContent: 'center', borderColor: payload.color, boxShadow: `0 0 10px ${payload.color}30`, width: 'max-content', maxWidth: '100%' }}>
+                                    {x > cx ? (
+                                        <>
+                                            <img src={payload.logo} alt="" className="w-6 h-6 rounded-full bg-white/10 p-0.5 shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                            <div className="flex flex-col items-start leading-none min-w-0">
+                                                <span className="text-sm font-bold text-white whitespace-nowrap">{payload.name}</span>
+                                                <span className="text-xs text-cyan-300 font-mono font-medium">{(percent * 100).toFixed(1)}%</span>
+                                            </div>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <div className="flex flex-col items-end leading-none min-w-0">
+                                                <span className="text-sm font-bold text-white whitespace-nowrap">{payload.name}</span>
+                                                <span className="text-xs text-cyan-300 font-mono font-medium">{(percent * 100).toFixed(1)}%</span>
+                                            </div>
+                                            <img src={payload.logo} alt="" className="w-6 h-6 rounded-full bg-white/10 p-0.5 shrink-0" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                        </>
+                                    )}
+                                </div>
+                            </div>
+                        </foreignObject>
+                    </g>
+                );
+            };
+
+            return (
+                <div ref={dashboardRef} className="min-h-screen text-white p-4 md:p-8 font-sans selection:bg-cyan-500 selection:text-black overflow-y-auto relative transition-all animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <BackgroundEffect />
+                    <div className="max-w-[1400px] mx-auto space-y-12 relative z-10">
+                        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 pb-6 border-b border-cyan-500/20">
+                            <div className="space-y-3">
+                                <div className="flex items-center gap-2">
+                                    <button onClick={onBack} className="flex items-center justify-center p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-cyan-500/20 hover:border-cyan-500/50 hover:text-cyan-400 transition-all group mr-2 backdrop-blur-sm" title="返回首页">
+                                        <ArrowLeftIcon className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                                    </button>
+                                    <div className="flex items-center gap-2 text-cyan-400 font-mono text-xs tracking-[0.2em] uppercase bg-cyan-900/20 px-2 py-1 rounded border border-cyan-500/20">
+                                        <ZapIcon className="w-4 h-4" /> Personal Portfolio
+                                    </div>
+                                </div>
+                                <h1 className="text-4xl md:text-6xl font-black tracking-tight text-white italic">
+                                    {ownerName}<span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 to-purple-500 pr-4">{categoryName === "加密资产" ? "的" : ""}{categoryName}</span>
+                                </h1>
+                                <div>
+                                    <p className="text-slate-400 font-medium text-lg">您的{categoryName}可视化中心</p>
+                                    <div className="flex items-center gap-1.5 text-slate-500 text-xs font-mono mt-2 bg-white/5 w-fit px-2 py-1 rounded border border-white/5 backdrop-blur-md">
+                                        <CalendarIcon className="w-3 h-3" />
+                                        <span>更新日期：2025年12月11日</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="flex items-end gap-4">
+                                <button onClick={handleAIAnalyze} className="p-3 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white rounded-xl shadow-lg shadow-purple-500/20 transition-all group backdrop-blur-sm flex items-center gap-2 font-bold" title="AI 智能分析">
+                                    <SparklesIcon className="w-5 h-5" />
+                                    <span className="hidden md:inline">AI 分析</span>
+                                </button>
+                                <button onClick={toggleFullscreen} className="p-3 bg-white/5 hover:bg-white/10 rounded-xl border border-cyan-500/30 transition-colors group backdrop-blur-sm" title={isFullscreen ? "退出全屏" : "全屏模式"}>
+                                    {isFullscreen ? <Minimize2Icon className="w-6 h-6 text-slate-400 group-hover:text-white" /> : <Maximize2Icon className="w-6 h-6 text-slate-400 group-hover:text-white" />}
+                                </button>
+                                <div className="relative group cursor-default">
+                                    <div className="absolute -inset-0.5 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl blur opacity-30 group-hover:opacity-75 transition duration-500"></div>
+                                    <div className="relative bg-[#0A0A1F]/90 backdrop-blur-xl p-6 rounded-2xl border border-cyan-500/30 flex flex-col items-end min-w-[260px] shadow-[0_0_20px_rgba(6,182,212,0.1)]">
+                                        <p className="text-slate-400 text-xs font-mono tracking-widest uppercase mb-1">Total Balance (CNY)</p>
+                                        <div className="text-3xl md:text-5xl font-bold text-white tracking-tight drop-shadow-[0_0_15px_rgba(34,211,238,0.3)]">
+                                            <CurrencyFormatter value={totalValue} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </header>
+
+                        {showAIModal && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                                <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setShowAIModal(false)} />
+                                <div className="relative w-full max-w-2xl bg-[#12122A] border border-purple-500/30 rounded-3xl p-8 shadow-[0_0_50px_rgba(139,92,246,0.3)] animate-in fade-in zoom-in-95 duration-300">
+                                    <button onClick={() => setShowAIModal(false)} className="absolute top-4 right-4 p-2 text-slate-400 hover:text-white hover:bg-white/10 rounded-full transition-colors"><XIcon className="w-6 h-6" /></button>
+                                    <div className="flex items-center gap-3 mb-6">
+                                        <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-blue-600 shadow-lg"><SparklesIcon className="w-6 h-6 text-white" /></div>
+                                        <div><h2 className="text-2xl font-bold text-white">AI 智能投资顾问</h2><p className="text-slate-400 text-sm">Powered by Gemini 2.5</p></div>
+                                    </div>
+                                    <div className="min-h-[200px] text-slate-200 leading-relaxed space-y-4">
+                                        {isAnalyzing ? (
+                                            <div className="flex flex-col items-center justify-center h-[300px] gap-4">
+                                                <Loader2Icon className="w-10 h-10 text-purple-400 animate-spin" />
+                                                <p className="text-purple-300 animate-pulse">正在深度分析您的资产组合...</p>
+                                            </div>
+                                        ) : (
+                                            <div className="prose prose-invert max-w-none whitespace-pre-wrap font-sans text-base">{aiAnalysis}</div>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+                            <div className="lg:col-span-8 space-y-8">
+                                <div className="bg-[#0A0A1F]/60 backdrop-blur-xl rounded-[2rem] p-8 border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] relative overflow-hidden group hover:border-cyan-500/40 transition-all duration-500">
+                                    <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent opacity-50" />
+                                    <div className="flex items-center justify-between mb-4 relative z-10">
+                                        <h2 className="text-2xl font-bold flex items-center gap-3 uppercase tracking-wide">
+                                            <ActivityIcon className="w-6 h-6 text-purple-400" /> 资产分布
+                                        </h2>
+                                        <div className="flex items-center gap-2 text-xs text-cyan-400 bg-cyan-900/20 px-3 py-1.5 rounded-full border border-cyan-500/20 animate-pulse">
+                                            <MoveIcon className="w-3 h-3" /> <span>可拖动旋转</span>
+                                        </div>
+                                    </div>
+                                    <div ref={pieChartContainerRef} className="h-[400px] w-full flex flex-col md:flex-row items-center justify-center relative touch-none" onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} style={{ cursor: isDragging ? 'grabbing' : 'grab' }}>
+                                        <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-[200px] h-[200px] bg-gradient-to-r from-cyan-500/10 to-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart margin={{ top: 20, right: 60, bottom: 20, left: 60 }}>
+                                                <Pie data={pieData} cx="50%" cy="50%" innerRadius={85} outerRadius={110} paddingAngle={4} startAngle={rotation} endAngle={rotation + 360} dataKey="value" onMouseEnter={onPieEnter} onMouseLeave={onPieLeave} stroke="none" cornerRadius={8} label={renderCustomizedLabel} labelLine={false} isAnimationActive={false} activeShape={(props) => <Sector {...props} outerRadius={110} stroke="none" />}>
+                                                    {pieData.map((entry, index) => (
+                                                        <Cell key={`cell-${index}`} fill={entry.color} opacity={1} style={{ transition: 'filter 0.3s ease', filter: activeIndex === index ? `drop-shadow(0 0 15px ${entry.color})` : 'none', outline: 'none' }} />
+                                                    ))}
+                                                </Pie>
+                                                <RechartsTooltip content={({ active, payload }) => {
+                                                    if (active && payload && payload.length) {
+                                                        const data = payload[0].payload;
+                                                        return (
+                                                            <div className="bg-[#12122A]/90 border border-cyan-500/30 p-3 rounded-lg shadow-[0_10px_40px_-10px_rgba(0,0,0,0.5)] backdrop-blur-xl z-50">
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <img src={data.logo} alt={data.name} className="w-4 h-4" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                                    <span className="font-bold text-white text-sm">{data.name}</span>
+                                                                </div>
+                                                                <div className="text-xl font-mono text-cyan-400 font-bold leading-tight">¥{data.value.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
+                                                                <div className="text-[10px] text-slate-400 mt-1">占比 {data.percentage.toFixed(2)}%</div>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                }} />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                                <div className="bg-[#0A0A1F]/60 backdrop-blur-xl rounded-[2rem] p-8 border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] relative overflow-hidden group hover:border-cyan-500/40 transition-all duration-500">
+                                    <div className="absolute top-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent opacity-50" />
+                                    <div className="flex items-center justify-between mb-6">
+                                        <h2 className="text-2xl font-bold flex items-center gap-3 uppercase tracking-wide">
+                                            <ActivityIcon className="w-6 h-6 text-cyan-400" /> 价值排行
+                                        </h2>
+                                    </div>
+                                    <div className="h-[300px] w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <BarChart data={sortedData} layout="vertical" margin={{ top: 10, right: 80, left: 20, bottom: 5 }} barCategoryGap={20}>
+                                                <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.05)" />
+                                                <XAxis type="number" hide />
+                                                <YAxis dataKey="name" type="category" tick={({ x, y, payload }) => {
+                                                    const item = sortedData.find(d => d.name === payload.value);
+                                                    return (
+                                                        <g transform={`translate(${x},${y})`}>
+                                                            {item && <image x={-30} y={-12} href={item.logo} height="24" width="24" style={{ opacity: 1 }} onError={(e) => { e.target.style.display = 'none'; }} />}
+                                                        </g>
+                                                    );
+                                                }} width={50} axisLine={false} tickLine={false} />
+                                                <RechartsTooltip cursor={{ fill: 'rgba(255,255,255,0.02)' }} contentStyle={{ backgroundColor: '#12122A', borderColor: '#06b6d4', borderRadius: '12px', boxShadow: '0 4px 20px rgba(0,0,0,0.5)' }} formatter={(value) => [`¥${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`, 'Value']} itemStyle={{ color: '#fff' }} />
+                                                <Bar dataKey="value" radius={[0, 8, 8, 0]} barSize={28}>
+                                                    {sortedData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} style={{ filter: `drop-shadow(0 0 5px ${entry.color}40)` }} />)}
+                                                    <LabelList dataKey="value" position="right" fill="#94a3b8" fontSize={12} fontWeight={600} fontFamily="monospace" formatter={(val) => `¥${val.toLocaleString(undefined, { maximumFractionDigits: 0 })}`} />
+                                                </Bar>
+                                            </BarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+                            </div>
+                            <div className="lg:col-span-4 space-y-8">
+                                <div className="bg-[#0A0A1F]/70 backdrop-blur-xl rounded-[2rem] p-8 border border-white/10 shadow-[0_8px_32px_0_rgba(0,0,0,0.36)] h-full flex flex-col hover:border-cyan-500/40 transition-colors">
+                                    <h2 className="text-2xl font-bold mb-8 flex items-center gap-3 uppercase tracking-wide"><LayersIcon className="w-6 h-6 text-emerald-400" /> 持仓明细</h2>
+                                    <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar">
+                                        {sortedData.map((item, index) => (
+                                            <div key={item.id} className="group relative bg-white/[0.02] hover:bg-white/[0.08] transition-all duration-300 rounded-2xl p-5 overflow-hidden cursor-pointer" onMouseEnter={() => setActiveIndex(index)} onMouseLeave={() => setActiveIndex(null)} style={{ borderWidth: '1px', borderStyle: 'solid', borderColor: item.color, boxShadow: `0 0 10px ${item.color}20` }}>
+                                                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.02] to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out" />
+                                                <div className="absolute left-0 top-0 bottom-0 w-[3px] transition-all duration-300 group-hover:h-full h-0" style={{ backgroundColor: item.color }} />
+                                                <div className="flex justify-between items-center relative z-10">
+                                                    <div className="flex items-center gap-4">
+                                                        <div className="w-12 h-12 shrink-0 rounded-full flex items-center justify-center bg-white/5 p-2 shadow-lg border border-white/5 group-hover:scale-110 transition-transform duration-300">
+                                                            <img src={item.logo} alt={item.name} className="w-full h-full object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                                        </div>
+                                                        <div>
+                                                            <div className="font-bold text-lg text-white tracking-wide group-hover:text-cyan-200 transition-colors flex items-center gap-2">{item.name}</div>
+                                                            <div className="text-xs text-slate-500 font-mono tracking-wider uppercase">{item.amount === 1 ? '' : item.amount.toLocaleString(undefined, { maximumFractionDigits: 4 }) + ' ' + item.symbol}</div>
+                                                        </div>
+                                                    </div>
+                                                    <div className="text-right flex flex-col items-end">
+                                                        <CurrencyFormatter value={item.value} className="font-mono font-bold text-lg transition-colors duration-300 text-white" />
+                                                        <div className="mt-2 flex items-center justify-center px-2.5 py-1 rounded-md border border-cyan-400/50 bg-cyan-900/20 shadow-[0_0_10px_rgba(34,211,238,0.15)] group-hover:bg-cyan-900/40 transition-colors">
+                                                            <span className="text-xs font-bold text-cyan-300 font-mono">{item.percentage.toFixed(1)}%</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-8 relative overflow-hidden rounded-2xl p-6 border border-purple-500/30 bg-gradient-to-br from-purple-900/20 to-blue-900/20 shadow-lg backdrop-blur-sm">
+                                        <div className="absolute -top-10 -right-10 w-32 h-32 bg-purple-500/30 rounded-full blur-3xl" />
+                                        <div className="flex items-start gap-4 relative z-10">
+                                            <div className="p-2.5 bg-purple-500/20 rounded-xl border border-purple-500/20"><TrendingUpIcon className="w-5 h-5 text-purple-300" /></div>
+                                            <div>
+                                                <h3 className="font-bold text-white text-base mb-1 uppercase tracking-wider">Portfolio Insight</h3>
+                                                <p className="text-sm text-slate-300 leading-relaxed font-light"><span className="text-white font-medium">{sortedData[0]?.name}</span> Dominance: <span className="text-cyan-400 font-mono">{(sortedData[0]?.percentage || 0).toFixed(0)}%</span>.<br />您的前两大持仓占总资金的 <span className="text-purple-300 font-mono">{(((sortedData[0]?.value || 0) + (sortedData.length > 1 ? sortedData[1].value : 0)) / totalValue * 100).toFixed(0)}%</span>。</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const InvestmentPlanView = ({ onBack, totalAssets }) => {
+            const plans = [
+                { id: 1, title: '定期定投 (DCA)', status: 'Active', desc: '每月定投￥2000', icon: RefreshCwIcon, color: '#10b981', type: 'Strategy' },
+                { id: 2, title: '核心-卫星策略', status: 'Active', desc: '核心持有 (BTC/ETH/Stock)+卫星博弈 (Meme/Alts)', icon: ActivityIcon, color: '#3b82f6', type: 'Allocation' },
+                { id: 3, title: '现金流管理', status: 'Review', desc: '确保预留 12 个月生活备用金', icon: CashLogo, color: '#f59e0b', type: 'Risk' },
+            ];
+
+            const todos = [
+                { id: 1, text: '季度末仓位再平衡', due: '2025-12-31', done: false },
+                { id: 2, text: '检查定投账户余额', due: 'Weekly', done: true },
+                { id: 3, text: '更新冷钱包固件', due: '2025-12-15', done: false },
+                { id: 4, text: '复盘 Q4 投资收益', due: '2026-01-05', done: false },
+            ];
+
+            const [taskList, setTaskList] = useState(todos);
+            const [isAdding, setIsAdding] = useState(false);
+            const [newTaskText, setNewTaskText] = useState("");
+            
+            // State for DCA Progress
+            const [dcaAmount, setDcaAmount] = useState(308); 
+            const [dcaInput, setDcaInput] = useState("");
+            const [isEditingDca, setIsEditingDca] = useState(false); // State to toggle DCA input visibility
+
+            const toggleTask = (id) => {
+                setTaskList(taskList.map(t => t.id === id ? { ...t, done: !t.done } : t));
+            };
+
+            const deleteTask = (id, e) => {
+                e.stopPropagation(); // Stop click from propagating to toggle task
+                setTaskList(taskList.filter(t => t.id !== id));
+            };
+
+            const annualTarget = 1500000; 
+            const progress = Math.min((totalAssets / annualTarget) * 100, 100);
+
+            const handleAddTask = () => {
+                if (newTaskText.trim()) {
+                    const newTask = {
+                        id: Date.now(),
+                        text: newTaskText,
+                        due: new Date().toISOString().split('T')[0], // Default to today
+                        done: false
+                    };
+                    setTaskList([...taskList, newTask]);
+                    setNewTaskText("");
+                    setIsAdding(false);
+                }
+            };
+            
+            const handleUpdateDca = () => {
+                const amount = parseFloat(dcaInput);
+                if (!isNaN(amount)) {
+                    setDcaAmount(amount);
+                    setDcaInput("");
+                    setIsEditingDca(false); // Hide input after update
+                }
+            };
+
+            return (
+                <div className="min-h-screen text-white p-4 md:p-8 font-sans selection:bg-cyan-500 selection:text-black overflow-y-auto relative animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <BackgroundEffect />
+                    <div className="max-w-[1400px] mx-auto space-y-8 relative z-10">
+                        <div className="flex items-center justify-between pb-6 border-b border-cyan-500/20">
+                            <div className="flex items-center gap-4">
+                                <button onClick={onBack} className="flex items-center justify-center p-2 rounded-lg bg-white/5 border border-white/10 hover:bg-cyan-500/20 hover:border-cyan-500/50 hover:text-cyan-400 transition-all group mr-2 backdrop-blur-sm" title="返回首页"><ArrowLeftIcon className="w-5 h-5 group-hover:-translate-x-1 transition-transform" /></button>
+                                <div><h1 className="text-3xl md:text-4xl font-black text-white italic tracking-wide">投资<span className="text-purple-400">计划中心</span></h1><p className="text-slate-400 text-sm mt-1">Strategic Planning & Goals</p></div>
+                            </div>
+                        </div>
+                        <div className="bg-[#0A0A1F]/60 backdrop-blur-xl rounded-[2rem] p-8 border border-white/10 shadow-lg relative overflow-hidden group">
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-purple-600/10 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none" />
+                            <div className="flex flex-col md:flex-row justify-between items-end gap-6 relative z-10">
+                                <div className="space-y-4 flex-1">
+                                    <h2 className="text-xl font-bold flex items-center gap-2 text-white uppercase tracking-wide"><TargetIcon className="w-6 h-6 text-pink-500" /> 2030 五年目标 (Annual Goal)</h2>
+                                    <div className="flex items-baseline gap-2"><span className="text-4xl font-bold text-white font-mono"><CurrencyFormatter value={totalAssets} /></span><span className="text-slate-400 text-sm">/ ¥{annualTarget.toLocaleString()}</span></div>
+                                    <div className="w-full bg-white/10 rounded-full h-4 overflow-hidden border border-white/5"><div className="bg-gradient-to-r from-pink-500 to-purple-600 h-full rounded-full transition-all duration-1000 ease-out" style={{ width: `${progress}%` }} /></div>
+                                    <p className="text-sm text-slate-400">当前进度: <span className="text-pink-400 font-bold">{progress.toFixed(2)}%</span>。{progress < 100 ? "继续加油，复利是世界第八大奇迹！" : "恭喜！目标已达成！🎉"}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                            <div className="space-y-6">
+                                <h3 className="text-xl font-bold text-white flex items-center gap-2"><ZapIcon className="w-5 h-5 text-yellow-400" /> 核心策略 (Core Strategies)</h3>
+                                <div className="grid gap-4">
+                                    {plans.map((plan) => (
+                                        <div key={plan.id} className="bg-[#0A0A1F]/40 backdrop-blur-md border border-white/10 rounded-2xl p-5 hover:border-cyan-500/30 transition-all hover:bg-[#0A0A1F]/60 flex flex-col gap-4 group">
+                                            <div className="flex items-start gap-4">
+                                                <div className="p-3 rounded-xl bg-white/5 border border-white/5 group-hover:scale-110 transition-transform" style={{ color: plan.color }}><plan.icon className="w-6 h-6" /></div>
+                                                <div className="flex-1">
+                                                    <div className="flex justify-between items-start"><h4 className="font-bold text-white text-lg">{plan.title}</h4><span className={`text-[10px] px-2 py-0.5 rounded border ${plan.status === 'Active' ? 'bg-emerald-500/20 text-emerald-400 border-emerald-500/20' : 'bg-slate-500/20 text-slate-400 border-slate-500/20'}`}>{plan.status}</span></div>
+                                                    <p className="text-slate-400 text-sm mt-1 leading-relaxed">{plan.desc}</p>
+                                                </div>
+                                            </div>
+                                            
+                                            {/* DCA Progress Section - Only for DCA Plan (id 1) */}
+                                            {plan.id === 1 && (
+                                                <div className="mt-2 bg-[#13132B]/60 rounded-xl p-4 border border-white/5 transition-colors hover:border-white/10">
+                                                    <div 
+                                                        className="cursor-pointer" 
+                                                        onClick={() => !isEditingDca && setIsEditingDca(true)}
+                                                        title="点击修改进度"
+                                                    >
+                                                        <div className="flex justify-between text-xs text-slate-400 mb-2 font-mono">
+                                                            <span>本月定投进度 (Monthly Progress)</span>
+                                                            <span className="text-emerald-400 font-bold">¥{dcaAmount} / ¥2000</span>
+                                                        </div>
+                                                        <div className="w-full bg-white/10 rounded-full h-2 mb-2 overflow-hidden">
+                                                            <div 
+                                                                className="bg-emerald-500 h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" 
+                                                                style={{ width: `${Math.min((dcaAmount / 2000) * 100, 100)}%` }}
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {isEditingDca && (
+                                                        <div className="flex gap-2 mt-3 animate-in fade-in slide-in-from-top-1 duration-200">
+                                                            <input 
+                                                                type="number" 
+                                                                value={dcaInput}
+                                                                onChange={(e) => setDcaInput(e.target.value)}
+                                                                placeholder="输入本月已投金额..."
+                                                                className="bg-[#0A0A1F] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white flex-1 focus:outline-none focus:border-emerald-500 transition-colors"
+                                                                onKeyDown={(e) => e.key === 'Enter' && handleUpdateDca()}
+                                                                autoFocus
+                                                            />
+                                                            <button 
+                                                                onClick={() => setIsEditingDca(false)}
+                                                                className="px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+                                                            >
+                                                                取消
+                                                            </button>
+                                                            <button 
+                                                                onClick={handleUpdateDca}
+                                                                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-1.5 rounded-lg transition-colors font-medium shadow-lg shadow-emerald-500/20"
+                                                            >
+                                                                更新
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                            <div className="space-y-6">
+                                <h3 className="text-xl font-bold text-white flex items-center gap-2"><ClipboardList className="w-5 h-5 text-cyan-400" /> 待办事项 (Action Items)</h3>
+                                <div className="bg-[#0A0A1F]/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 min-h-[300px]">
+                                    <div className="space-y-3">
+                                        {taskList.map((task) => (
+                                            <div key={task.id} onClick={() => toggleTask(task.id)} className={`flex items-center gap-4 p-3 rounded-xl transition-all cursor-pointer border group ${task.done ? 'bg-emerald-900/10 border-emerald-500/20 opacity-60' : 'bg-white/5 border-white/5 hover:bg-white/10'}`}>
+                                                <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${task.done ? 'border-emerald-500 bg-emerald-500 text-black' : 'border-slate-500 text-transparent'}`}><CheckCircleIcon className="w-4 h-4" /></div>
+                                                <div className="flex-1">
+                                                    <p className={`text-sm font-medium transition-all ${task.done ? 'text-emerald-400 line-through decoration-emerald-500/50' : 'text-white'}`}>{task.text}</p>
+                                                    <p className="text-xs text-slate-500 mt-0.5">Due: {task.due}</p>
+                                                </div>
+                                                <button onClick={(e) => deleteTask(task.id, e)} className="p-2 text-slate-500 hover:text-rose-500 hover:bg-rose-500/10 rounded-lg transition-colors group-hover:opacity-100 opacity-0" title="删除">
+                                                    <TrashIcon className="w-4 h-4" />
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div className="mt-4 pt-4 border-t border-white/5 text-center">
+                                        {isAdding ? (
+                                            <div className="flex flex-col gap-2 animate-in fade-in zoom-in-95 duration-200">
+                                                <input 
+                                                    type="text" 
+                                                    value={newTaskText} 
+                                                    onChange={(e) => setNewTaskText(e.target.value)} 
+                                                    placeholder="输入待办事项..." 
+                                                    className="w-full bg-[#0A0A1F] border border-white/10 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                                                    autoFocus
+                                                    onKeyDown={(e) => e.key === 'Enter' && handleAddTask()}
+                                                />
+                                                <div className="flex gap-2 justify-end">
+                                                    <button onClick={() => setIsAdding(false)} className="px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition-colors">取消</button>
+                                                    <button onClick={handleAddTask} className="px-3 py-1.5 rounded-lg text-xs bg-cyan-600 text-white hover:bg-cyan-500 transition-colors">确认添加</button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <button onClick={() => setIsAdding(true)} className="text-xs text-slate-500 hover:text-cyan-400 transition-colors flex items-center justify-center gap-1 w-full py-2">+ 添加新事项 (Add New Item)</button>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const App = () => {
+            const [currentView, setCurrentView] = useState('home');
+            const [isOnline, setIsOnline] = useState(true);
+            const [portfolios, setPortfolios] = useState({
+                felix: INITIAL_FELIX_DATA,
+                jiamin: INITIAL_JIAMIN_DATA,
+                cash: INITIAL_CASH_DATA,
+                usStocks: INITIAL_US_STOCKS_DATA,
+                aShares: INITIAL_A_SHARES_DATA,
+                others: INITIAL_OTHERS_DATA,
+            });
+
+            const ASHARE_CODES = { hs300: 'sh510300', military: 'sh512660' };
+
+            useEffect(() => {
+                const fetchPrices = async () => {
+                    let isCryptoFetchSuccess = false;
+                    let isStockFetchSuccess = false;
+
+                    // 1. Fetch Crypto
+                    try {
+                        const ids = Object.values(COINGECKO_IDS).join(',');
+                        const response = await fetch(`https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=cny,usd&include_24hr_change=true`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            isCryptoFetchSuccess = true;
+                            setPortfolios(prev => {
+                                const updateAssets = (assets) => assets.map(asset => {
+                                    const apiId = COINGECKO_IDS[asset.id.toLowerCase()];
+                                    if (apiId && data[apiId]) {
+                                        return { ...asset, basePrice: data[apiId].cny || asset.basePrice, priceUsd: data[apiId].usd, change24h: data[apiId].usd_24h_change || data[apiId].cny_24h_change };
+                                    }
+                                    return asset;
+                                });
+                                return { ...prev, felix: updateAssets(prev.felix), jiamin: updateAssets(prev.jiamin), others: updateAssets(prev.others) };
+                            });
+                        }
+                    } catch (error) { console.warn("Failed to fetch crypto prices:", error); }
+
+                    // 2. Fetch A-Share
+                    try {
+                        const codes = Object.values(ASHARE_CODES).join(',');
+                        const response = await fetch(`https://api.doctorxiong.club/v1/stock?code=${codes}`);
+                        if (response.ok) {
+                            const resData = await response.json();
+                            if (resData.code === 200 && resData.data) {
+                                isStockFetchSuccess = true;
+                                const stockMap = new Map(resData.data.map((item) => [item.code, item]));
+                                setPortfolios(prev => {
+                                    const updateStocks = (assets) => assets.map(asset => {
+                                        const stockCode = ASHARE_CODES[asset.id];
+                                        const stockData = stockMap.get(stockCode);
+                                        if (stockData) {
+                                            return { ...asset, basePrice: parseFloat(stockData.price) || asset.basePrice, change24h: parseFloat(stockData.changePercent) || 0 };
+                                        }
+                                        return asset;
+                                    });
+                                    return { ...prev, aShares: updateStocks(prev.aShares) };
+                                });
+                            }
+                        }
+                    } catch (error) { console.warn("Failed to fetch A-Share prices:", error); }
+
+                    // 3. Status
+                    setIsOnline(isCryptoFetchSuccess || isStockFetchSuccess);
+
+                    // 4. Simulate US Stocks (and fallback)
+                    setPortfolios(prev => {
+                        const simulate = (assets, volatility) => assets.map(asset => {
+                            if (asset.id === 'cash') return asset;
+                            const change = 1 + (Math.random() - 0.5) * volatility;
+                            const mockChange24h = (Math.random() * 4 - 2);
+                            return { ...asset, basePrice: asset.basePrice * change, priceUsd: asset.priceUsd ? asset.priceUsd * change : undefined, change24h: mockChange24h };
+                        });
+                        return { ...prev, usStocks: simulate(prev.usStocks, 0.001), aShares: isStockFetchSuccess ? prev.aShares : simulate(prev.aShares, 0.002) };
+                    });
+                };
+
+                fetchPrices();
+                const intervalId = setInterval(fetchPrices, 20000);
+                return () => clearInterval(intervalId);
+            }, []);
+
+            const totalAssets = useMemo(() => {
+                const sum = (data) => calculateTotal(data);
+                return sum(portfolios.felix) + sum(portfolios.jiamin) + sum(portfolios.cash) + sum(portfolios.usStocks) + sum(portfolios.aShares) + sum(portfolios.others);
+            }, [portfolios]);
+
+            const calculatePortfolioChange = (assets) => {
+                let totalValue = 0;
+                let weightedChangeSum = 0;
+                assets.forEach(asset => {
+                    const value = asset.basePrice * asset.amount;
+                    const change = asset.change24h || 0;
+                    totalValue += value;
+                    weightedChangeSum += value * change;
+                });
+                if (totalValue === 0) return "0.00%";
+                const avgChange = weightedChangeSum / totalValue;
+                const sign = avgChange > 0 ? "+" : "";
+                if (Math.abs(avgChange) < 0.005) return "0.00%";
+                return `${sign}${avgChange.toFixed(2)}%`;
+            };
+
+            const assetCategories = useMemo(() => [
+                { id: 'felix-crypto', title: '加密资产:Felix', value: calculateTotal(portfolios.felix), change: calculatePortfolioChange(portfolios.felix), icon: BitcoinLogo, color: '#F7931A', desc: 'BTC, ETH, SOL...' },
+                { id: 'jiamin-crypto', title: '加密资产:家敏', value: calculateTotal(portfolios.jiamin), change: calculatePortfolioChange(portfolios.jiamin), icon: BitcoinLogo, color: '#F7931A', desc: 'ADA, ETH, DOGE...' },
+                { id: 'cash', title: '现金资产', value: calculateTotal(portfolios.cash), change: '0.00%', icon: CashLogo, color: '#10b981', desc: '流动资金 & 存款' },
+                { id: 'us-stocks', title: '美股账户', value: calculateTotal(portfolios.usStocks), change: calculatePortfolioChange(portfolios.usStocks), icon: UsStocksLogo, color: '#3b82f6', desc: 'Circle Private Shares' },
+                { id: 'a-shares', title: 'A股账户', value: calculateTotal(portfolios.aShares), change: calculatePortfolioChange(portfolios.aShares), icon: ASharesLogo, color: '#ef4444', desc: '沪深300, 军工ETF' },
+                { id: 'others', title: '其他资产', value: calculateTotal(portfolios.others), change: calculatePortfolioChange(portfolios.others), icon: GoldLogo, color: '#f59e0b', desc: '待报销, 购物卡' },
+            ], [portfolios]);
+
+            if (currentView === 'realtime-market') return <RealTimeMarket portfolios={portfolios} onBack={() => setCurrentView('home')} />;
+            if (currentView === 'investment-plan') return <InvestmentPlanView onBack={() => setCurrentView('home')} totalAssets={totalAssets} />;
+            
+            // Map asset categories for detail view
+            const renderDetailView = () => {
+                if (currentView === 'asset-overview') {
+                    const overviewData = [
+                        { id: 'felix-crypto', name: '加密资产:Felix', amount: 1, basePrice: calculateTotal(portfolios.felix), symbol: 'CNY', color: '#F7931A', logo: 'https://cryptologos.cc/logos/bitcoin-btc-logo.svg?v=035' },
+                        { id: 'us-stocks', name: '美股账户', amount: 1, basePrice: calculateTotal(portfolios.usStocks), symbol: 'CNY', color: '#3b82f6', logo: 'https://cdnjs.cloudflare.com/ajax/libs/flag-icon-css/3.5.0/flags/1x1/us.svg' },
+                        { id: 'a-shares', name: 'A股账户', amount: 1, basePrice: calculateTotal(portfolios.aShares), symbol: 'CNY', color: '#ef4444', logo: 'https://upload.wikimedia.org/wikipedia/commons/thumb/f/fa/Flag_of_the_People%27s_Republic_of_China.svg/256px-Flag_of_the_People%27s_Republic_of_China.svg.png' },
+                        { id: 'jiamin-crypto', name: '加密资产:家敏', amount: 1, basePrice: calculateTotal(portfolios.jiamin), symbol: 'CNY', color: '#F7931A', logo: 'https://cryptologos.cc/logos/bitcoin-btc-logo.svg?v=035' },
+                        { id: 'cash', name: '现金资产', amount: 1, basePrice: calculateTotal(portfolios.cash), symbol: 'CNY', color: '#10b981', logo: 'https://s1.aigei.com/src/img/png/c1/c1c58f9f81204e81858b07ba838e6f79.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:Bhn0W9ek2wCZM4OiyJ8VhVdloqM=' },
+                        { id: 'others', name: '其他资产', amount: 1, basePrice: calculateTotal(portfolios.others), symbol: 'CNY', color: '#f59e0b', logo: 'https://cdn-icons-png.flaticon.com/128/7880/7880066.png' }
+                    ];
+                    return <PortfolioDetail ownerName="Felix" categoryName="资产总览" data={overviewData} onBack={() => setCurrentView('home')} useOriginalOrder={true} />;
+                }
+                if (currentView === 'felix-crypto') return <PortfolioDetail ownerName="Felix" data={portfolios.felix} onBack={() => setCurrentView('home')} />;
+                if (currentView === 'jiamin-crypto') return <PortfolioDetail ownerName="家敏" data={portfolios.jiamin} onBack={() => setCurrentView('home')} />;
+                if (currentView === 'cash') return <PortfolioDetail ownerName="" categoryName="现金资产" data={portfolios.cash} onBack={() => setCurrentView('home')} />;
+                if (currentView === 'us-stocks') return <PortfolioDetail ownerName="" categoryName="美股账户" data={portfolios.usStocks} onBack={() => setCurrentView('home')} />;
+                if (currentView === 'a-shares') return <PortfolioDetail ownerName="" categoryName="A股账户" data={portfolios.aShares} onBack={() => setCurrentView('home')} />;
+                if (currentView === 'others') return <PortfolioDetail ownerName="" categoryName="其他资产" data={portfolios.others} onBack={() => setCurrentView('home')} />;
+                return null;
+            };
+
+            const detailView = renderDetailView();
+            if (detailView) return detailView;
+
+            return (
+                <div className="min-h-screen text-white p-4 md:p-8 font-sans selection:bg-cyan-500 selection:text-black overflow-y-auto relative animate-in fade-in zoom-in-95 duration-500">
+                    <BackgroundEffect />
+                    <div className="max-w-[1400px] mx-auto relative z-10">
+                        <header className="flex flex-col items-center justify-center pt-10 pb-12 text-center space-y-4">
+                            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/5 border border-white/10 text-cyan-400 text-xs font-mono tracking-widest uppercase mb-2 backdrop-blur-sm">
+                                <BriefcaseIcon className="w-3 h-3" /> Family Office
+                            </div>
+                            <h1 className="text-5xl md:text-7xl font-black tracking-tight text-white drop-shadow-[0_0_15px_rgba(255,255,255,0.2)]">
+                                <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400">Felix资产</span>
+                                <span className="italic ml-4 text-white">总览</span>
+                            </h1>
+                            <div className="flex items-center gap-2 text-slate-400">
+                                <p className="text-lg max-w-2xl mx-auto">全类资产实时监控与管理中心</p>
+                                {isOnline ? (
+                                    <span className="flex items-center gap-1 text-xs text-emerald-400 bg-emerald-900/20 px-2 py-0.5 rounded border border-emerald-500/20"><WifiIcon className="w-3 h-3" /> 实时数据</span>
+                                ) : (
+                                    <span className="flex items-center gap-1 text-xs text-rose-400 bg-rose-900/20 px-2 py-0.5 rounded border border-rose-500/20"><WifiOffIcon className="w-3 h-3" /> 离线数据</span>
+                                )}
+                            </div>
+                            <div className="mt-8 relative group">
+                                <div className="absolute -inset-1 bg-gradient-to-r from-cyan-500 to-purple-600 rounded-2xl blur opacity-30 group-hover:opacity-60 transition duration-500 animate-pulse-slow"></div>
+                                <div className="relative bg-[#0A0A1F]/80 backdrop-blur-xl border border-white/10 px-8 py-4 rounded-xl flex flex-col items-center shadow-2xl">
+                                    <span className="text-xs text-slate-500 font-mono uppercase tracking-widest mb-1">Total Net Worth (CNY)</span>
+                                    <span className="text-4xl md:text-5xl font-bold text-white tracking-tight drop-shadow-[0_0_10px_rgba(34,211,238,0.5)]">
+                                        <CurrencyFormatter value={totalAssets} />
+                                    </span>
+                                </div>
+                            </div>
+                        </header>
+                        <div className="space-y-4">
+                            <div className="flex justify-start gap-4 flex-wrap">
+                                <button onClick={() => setCurrentView('realtime-market')} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white rounded-xl shadow-lg shadow-cyan-500/20 transition-all hover:scale-105 font-bold text-sm">
+                                    <span>📈 实时行情</span>
+                                </button>
+                                <button onClick={() => setCurrentView('asset-overview')} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded-xl shadow-lg shadow-purple-500/20 transition-all hover:scale-105 font-bold text-sm">
+                                    <span>📊 资产总览</span>
+                                </button>
+                                <button onClick={() => setCurrentView('investment-plan')} className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-pink-600 to-rose-600 hover:from-pink-500 hover:to-rose-500 text-white rounded-xl shadow-lg shadow-pink-500/20 transition-all hover:scale-105 font-bold text-sm">
+                                    <span>📋 投资计划</span>
+                                </button>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {assetCategories.map((asset) => (
+                                    <div key={asset.id} onClick={() => setCurrentView(asset.id)} className="group relative bg-[#0A0A1F]/40 backdrop-blur-md border border-white/10 rounded-2xl p-6 cursor-pointer overflow-hidden transition-all duration-300 hover:shadow-[0_0_40px_rgba(6,182,212,0.15)] hover:-translate-y-2 hover:bg-[#0A0A1F]/60">
+                                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-br from-white/5 to-transparent rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110 group-hover:from-white/10" />
+                                        <div className="absolute bottom-0 left-0 w-full h-[1px] bg-gradient-to-r from-transparent via-current to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" style={{ color: asset.color }} />
+                                        <div className="absolute inset-0 border-2 border-transparent group-hover:border-white/5 rounded-2xl transition-colors duration-300" />
+                                        <div className="relative z-10 flex flex-col h-full justify-between">
+                                            <div>
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className={`p-3 rounded-xl bg-white/5 border border-white/5 group-hover:scale-110 transition-transform duration-300 shadow-[0_0_15px_rgba(0,0,0,0.2)]`} style={{ color: asset.color }}><asset.icon className="w-6 h-6" /></div>
+                                                    <span className={`text-xs font-mono px-2 py-1 rounded border backdrop-blur-sm ${asset.change.startsWith('+') || asset.change === 'Live' ? 'text-emerald-400 border-emerald-400/20 bg-emerald-400/10' : asset.change === '0.00%' || asset.change === 'Cached' ? 'text-slate-400 border-slate-400/20 bg-slate-400/10' : 'text-rose-400 border-rose-400/20 bg-rose-400/10'}`}>{asset.change}</span>
+                                                </div>
+                                                <h3 className="text-2xl font-black italic tracking-wide mb-2 relative z-10">
+                                                    <div className="absolute -inset-1 blur-lg opacity-0 group-hover:opacity-40 transition-opacity duration-500" style={{ backgroundColor: asset.color }} />
+                                                    <span className="relative bg-clip-text text-transparent bg-gradient-to-r transition-all duration-500 pr-2" style={{ backgroundImage: `linear-gradient(120deg, #E0F2FE 0%, ${asset.color} 90%)` }}>{asset.title}</span>
+                                                </h3>
+                                                <p className="text-sm text-slate-500 font-medium">{asset.desc}</p>
+                                            </div>
+                                            <div className="mt-6 pt-6 border-t border-white/5 flex justify-between items-end">
+                                                <div><div className="text-xs text-slate-500 mb-1">当前估值</div><div className="text-2xl font-bold text-white tracking-tight group-hover:text-cyan-100 transition-colors"><CurrencyFormatter value={asset.value} /></div></div>
+                                                <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center text-slate-400 group-hover:bg-cyan-500 group-hover:text-white transition-all duration-300 group-hover:shadow-[0_0_15px_rgba(6,182,212,0.5)]"><ArrowLeftIcon className="w-4 h-4 rotate-180" /></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        <footer className="text-center text-slate-600 text-xs py-8"><p>© 2025 Family Office Dashboard. All rights reserved.</p></footer>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
