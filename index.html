@@ -1455,37 +1455,62 @@
 
             useEffect(() => {
                 const generateRealData = async () => {
-                    setIsLoading(true);
+                    // Cache Configuration
+                    const CACHE_KEY = 'felix_btc_trend_cache';
+                    const CACHE_TS_KEY = 'felix_btc_trend_ts';
+                    const ONE_HOUR = 60 * 60 * 1000;
+                    
+                    // Check if we need to show loading (only if cache is expired or missing)
+                    const lastFetch = localStorage.getItem(CACHE_TS_KEY);
+                    const now = Date.now();
+                    const hasValidCache = lastFetch && (now - parseInt(lastFetch) < ONE_HOUR);
+
+                    if (!hasValidCache) {
+                        setIsLoading(true);
+                    }
                     
                     // 1. Try to load saved daily snapshots from LocalStorage (Real Recording)
                     // Format: { "2023-10-01": 150000, "2023-10-02": 152000 ... }
                     const savedHistoryStr = localStorage.getItem('felix_asset_history_v1');
                     let savedHistory = savedHistoryStr ? JSON.parse(savedHistoryStr) : {};
 
-                    // 2. Save TODAY's data point
+                    // 2. Save TODAY's data point (Always keep current value fresh locally)
                     const todayKey = new Date().toISOString().split('T')[0];
-                    if (Math.abs(savedHistory[todayKey] - totalAssets) > 1) { // Only save if changed or new
+                    if (Math.abs((savedHistory[todayKey] || 0) - totalAssets) > 1) { 
                         savedHistory[todayKey] = totalAssets;
                         localStorage.setItem('felix_asset_history_v1', JSON.stringify(savedHistory));
                     }
 
-                    // 3. Fetch Market Trend for Backfilling (Real Market Data)
-                    // We use Bitcoin as a proxy for the crypto portion's volatility over the last year
-                    // This creates a "Real" looking curve based on market movements, not random math.
+                    // 3. Fetch Market Trend for Backfilling (With 1 Hour Cache)
                     try {
-                        const response = await fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=cny&days=365&interval=daily');
-                        
                         let trendData = [];
-                        if (response.ok) {
-                            const data = await response.json();
-                            trendData = data.prices; // [[timestamp, price], ...]
+                        
+                        if (hasValidCache) {
+                            // Use Cache
+                            const cachedStr = localStorage.getItem(CACHE_KEY);
+                            if (cachedStr) {
+                                trendData = JSON.parse(cachedStr);
+                                // console.log("Using cached market trend data (1h validity)");
+                            }
+                        }
+
+                        // If no cache or cache empty, fetch fresh
+                        if (trendData.length === 0) {
+                            const response = await fetch('https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=cny&days=365&interval=daily');
+                            if (response.ok) {
+                                const data = await response.json();
+                                trendData = data.prices; // [[timestamp, price], ...]
+                                // Update Cache
+                                localStorage.setItem(CACHE_KEY, JSON.stringify(trendData));
+                                localStorage.setItem(CACHE_TS_KEY, now.toString());
+                            } else {
+                                // Fallback to stale cache if API fails
+                                const staleCache = localStorage.getItem(CACHE_KEY);
+                                if (staleCache) trendData = JSON.parse(staleCache);
+                            }
                         }
 
                         // 4. Construct the Final Curve
-                        // Logic: 
-                        // - If we have a saved snapshot for a date, use it (Most Real).
-                        // - If not, backcast using current value * (Historical_BTC_Price / Current_BTC_Price) * CryptoRatio + StableValue
-                        
                         if (trendData.length > 0) {
                             const currentBtcPrice = trendData[trendData.length - 1][1];
                             const cryptoPart = totalAssets * cryptoRatio;
@@ -1507,7 +1532,6 @@
                                 }
 
                                 // B. Otherwise backcast using market trend
-                                // This assumes your portfolio composition was roughly similar in the past
                                 const volatilityFactor = btcPrice / currentBtcPrice;
                                 const estimatedValue = (cryptoPart * volatilityFactor) + stablePart;
 
@@ -1521,23 +1545,16 @@
 
                             setChartData(combinedData);
                         } else {
-                            // Fallback if API fails: Just show the saved history points or a straight line
-                            // (Minimal fallback to avoid breaking)
+                            // Fallback minimal data
                             const fallbackData = Object.entries(savedHistory)
                                 .map(([k, v]) => ({ date: k.substring(5), fullDate: new Date(k), value: v }))
                                 .sort((a, b) => a.fullDate - b.fullDate);
                             
-                            if (fallbackData.length < 2) {
-                                // Not enough history, show a flat line for today
-                                setChartData([{ date: 'Now', value: totalAssets }]);
-                            } else {
-                                setChartData(fallbackData);
-                            }
+                            setChartData(fallbackData.length > 0 ? fallbackData : [{ date: 'Now', value: totalAssets }]);
                         }
 
                     } catch (e) {
                         console.error("Failed to generate real curve", e);
-                        // Fallback: simple flat line
                         setChartData([{ date: 'Today', value: totalAssets }]);
                     } finally {
                         setIsLoading(false);
@@ -1564,8 +1581,6 @@
                 const change = ((end - start) / start) * 100;
                 
                 const values = filteredData.map(d => d.value);
-                const max = Math.max(...values);
-                const min = Math.min(...values);
                 // Simple max drawdown calculation from peak
                 let maxDD = 0;
                 let peak = values[0];
