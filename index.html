@@ -208,7 +208,6 @@
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
         );
 
-        // 新增 EditIcon
         const EditIcon = (props) => (
             <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" /><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" /></svg>
         );
@@ -523,7 +522,7 @@
             );
         };
 
-        const PortfolioDetail = ({ ownerName, categoryName = "加密资产", data, onBack, useOriginalOrder = false }) => {
+        const PortfolioDetail = ({ ownerName, categoryName = "加密资产", data, onBack, useOriginalOrder = false, onUpdate }) => {
             const [activeIndex, setActiveIndex] = useState(null);
             const [isFullscreen, setIsFullscreen] = useState(false);
             const dashboardRef = useRef(null);
@@ -535,6 +534,10 @@
             const [isAnalyzing, setIsAnalyzing] = useState(false);
             const [aiAnalysis, setAiAnalysis] = useState(null);
             
+            // --- Edit Modal State ---
+            const [editItem, setEditItem] = useState(null);
+            const [editValue, setEditValue] = useState('');
+
             // Mobile detection for responsive chart sizing
             const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
 
@@ -586,6 +589,21 @@
 
             const onPieEnter = (_, index) => setActiveIndex(index);
             const onPieLeave = () => setActiveIndex(null);
+
+            // --- Edit Handler ---
+            const handleCardClick = (item) => {
+                if (onUpdate) {
+                    setEditItem(item);
+                    setEditValue(item.amount);
+                }
+            };
+
+            const handleSaveEdit = () => {
+                if (editItem && editValue !== '') {
+                    onUpdate(editItem.id, editValue);
+                    setEditItem(null);
+                }
+            };
 
             const toggleFullscreen = async () => {
                 try {
@@ -812,6 +830,42 @@
                             </div>
                         </header>
 
+                        {/* Edit Amount Modal */}
+                        {editItem && (
+                            <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                                <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setEditItem(null)} />
+                                <div className="relative w-full max-w-sm bg-[#12122A] border border-cyan-500/30 rounded-2xl p-6 shadow-[0_0_40px_rgba(6,182,212,0.2)] animate-in fade-in zoom-in-95 duration-200">
+                                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                                        <EditIcon className="w-5 h-5 text-cyan-400" /> 修改持仓数量
+                                    </h3>
+                                    <div className="flex items-center gap-3 mb-6 p-3 bg-white/5 rounded-xl border border-white/5">
+                                        <img src={editItem.logo} className="w-10 h-10 rounded-full" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
+                                        <div>
+                                            <div className="font-bold text-white">{editItem.name}</div>
+                                            <div className="text-xs text-slate-400">当前: {editItem.amount} {editItem.symbol}</div>
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <div>
+                                            <label className="text-xs text-slate-500 mb-1 block">新数量 (Amount)</label>
+                                            <input 
+                                                type="number" 
+                                                value={editValue} 
+                                                onChange={e => setEditValue(e.target.value)}
+                                                className="w-full bg-[#0A0A1F] border border-white/20 rounded-xl px-4 py-3 text-lg font-mono text-white focus:outline-none focus:border-cyan-500 transition-colors"
+                                                autoFocus
+                                                onKeyDown={(e) => e.key === 'Enter' && handleSaveEdit()}
+                                            />
+                                        </div>
+                                        <div className="flex gap-3 pt-2">
+                                            <button onClick={() => setEditItem(null)} className="flex-1 py-2.5 rounded-xl text-slate-400 hover:bg-white/5 transition-colors text-sm">取消</button>
+                                            <button onClick={handleSaveEdit} className="flex-1 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white text-sm font-bold shadow-lg shadow-cyan-500/20 transition-all">确认修改</button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {showAIModal && (
                             <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
                                 <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setShowAIModal(false)} />
@@ -940,7 +994,14 @@
                                     <h2 className="text-2xl font-bold mb-8 flex items-center gap-3 uppercase tracking-wide"><LayersIcon className="w-6 h-6 text-emerald-400" /> 持仓明细</h2>
                                     <div className="flex-1 space-y-4 overflow-y-auto pr-2 custom-scrollbar">
                                         {sortedData.map((item, index) => (
-                                            <div key={item.id} className="group relative bg-white/[0.02] hover:bg-white/[0.08] transition-all duration-300 rounded-2xl p-5 overflow-hidden cursor-pointer" onMouseEnter={() => setActiveIndex(index)} onMouseLeave={() => setActiveIndex(null)} style={{ borderWidth: '1px', borderStyle: 'solid', borderColor: item.color, boxShadow: `0 0 10px ${item.color}20` }}>
+                                            <div 
+                                                key={item.id} 
+                                                className="group relative bg-white/[0.02] hover:bg-white/[0.08] transition-all duration-300 rounded-2xl p-5 overflow-hidden cursor-pointer" 
+                                                onMouseEnter={() => setActiveIndex(index)} 
+                                                onMouseLeave={() => setActiveIndex(null)} 
+                                                onClick={() => handleCardClick(item)}
+                                                style={{ borderWidth: '1px', borderStyle: 'solid', borderColor: item.color, boxShadow: `0 0 10px ${item.color}20` }}
+                                            >
                                                 <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/[0.02] to-transparent translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700 ease-in-out" />
                                                 <div className="absolute left-0 top-0 bottom-0 w-[3px] transition-all duration-300 group-hover:h-full h-0" style={{ backgroundColor: item.color }} />
                                                 <div className="flex justify-between items-center relative z-10">
@@ -949,7 +1010,10 @@
                                                             <img src={item.logo} alt={item.name} className="w-full h-full object-contain" onError={(e) => { e.currentTarget.style.display = 'none'; }} />
                                                         </div>
                                                         <div>
-                                                            <div className="font-bold text-lg text-white tracking-wide group-hover:text-cyan-200 transition-colors flex items-center gap-2">{item.name}</div>
+                                                            <div className="font-bold text-lg text-white tracking-wide group-hover:text-cyan-200 transition-colors flex items-center gap-2">
+                                                                {item.name}
+                                                                {onUpdate && <EditIcon className="w-3 h-3 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity" />}
+                                                            </div>
                                                             <div className="text-xs text-slate-500 font-mono tracking-wider uppercase">{item.amount === 1 ? '' : item.amount.toLocaleString(undefined, { maximumFractionDigits: 4 }) + ' ' + item.symbol}</div>
                                                         </div>
                                                     </div>
@@ -1332,6 +1396,16 @@
 
             const ASHARE_CODES = { hs300: 'sh510300', military: 'sh512660' };
 
+            // --- Function to update asset quantity ---
+            const handleAssetUpdate = (categoryKey, assetId, newAmount) => {
+                setPortfolios(prev => ({
+                    ...prev,
+                    [categoryKey]: prev[categoryKey].map(asset => 
+                        asset.id === assetId ? { ...asset, amount: parseFloat(newAmount) } : asset
+                    )
+                }));
+            };
+
             useEffect(() => {
                 const fetchPrices = async () => {
                     let isCryptoFetchSuccess = false;
@@ -1450,14 +1524,19 @@
                         { id: 'cash', name: '现金资产', amount: 1, basePrice: calculateTotal(portfolios.cash), symbol: 'CNY', color: '#10b981', logo: 'https://s1.aigei.com/src/img/png/c1/c1c58f9f81204e81858b07ba838e6f79.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:Bhn0W9ek2wCZM4OiyJ8VhVdloqM=' },
                         { id: 'others', name: '其他资产', amount: 1, basePrice: calculateTotal(portfolios.others), symbol: 'CNY', color: '#f59e0b', logo: 'https://cdn-icons-png.flaticon.com/128/7880/7880066.png' }
                     ];
+                    // Overview does not support individual edits
                     return <PortfolioDetail ownerName="Felix" categoryName="资产总览" data={overviewData} onBack={() => setCurrentView('home')} useOriginalOrder={true} />;
                 }
-                if (currentView === 'felix-crypto') return <PortfolioDetail ownerName="Felix" data={portfolios.felix} onBack={() => setCurrentView('home')} />;
-                if (currentView === 'jiamin-crypto') return <PortfolioDetail ownerName="家敏" data={portfolios.jiamin} onBack={() => setCurrentView('home')} />;
-                if (currentView === 'cash') return <PortfolioDetail ownerName="" categoryName="现金资产" data={portfolios.cash} onBack={() => setCurrentView('home')} />;
-                if (currentView === 'us-stocks') return <PortfolioDetail ownerName="" categoryName="美股账户" data={portfolios.usStocks} onBack={() => setCurrentView('home')} />;
-                if (currentView === 'a-shares') return <PortfolioDetail ownerName="" categoryName="A股账户" data={portfolios.aShares} onBack={() => setCurrentView('home')} />;
-                if (currentView === 'others') return <PortfolioDetail ownerName="" categoryName="其他资产" data={portfolios.others} onBack={() => setCurrentView('home')} />;
+
+                // Pass the specific update handler based on the category
+                const updateHandler = (key) => (id, amount) => handleAssetUpdate(key, id, amount);
+
+                if (currentView === 'felix-crypto') return <PortfolioDetail ownerName="Felix" data={portfolios.felix} onBack={() => setCurrentView('home')} onUpdate={updateHandler('felix')} />;
+                if (currentView === 'jiamin-crypto') return <PortfolioDetail ownerName="家敏" data={portfolios.jiamin} onBack={() => setCurrentView('home')} onUpdate={updateHandler('jiamin')} />;
+                if (currentView === 'cash') return <PortfolioDetail ownerName="" categoryName="现金资产" data={portfolios.cash} onBack={() => setCurrentView('home')} onUpdate={updateHandler('cash')} />;
+                if (currentView === 'us-stocks') return <PortfolioDetail ownerName="" categoryName="美股账户" data={portfolios.usStocks} onBack={() => setCurrentView('home')} onUpdate={updateHandler('usStocks')} />;
+                if (currentView === 'a-shares') return <PortfolioDetail ownerName="" categoryName="A股账户" data={portfolios.aShares} onBack={() => setCurrentView('home')} onUpdate={updateHandler('aShares')} />;
+                if (currentView === 'others') return <PortfolioDetail ownerName="" categoryName="其他资产" data={portfolios.others} onBack={() => setCurrentView('home')} onUpdate={updateHandler('others')} />;
                 return null;
             };
 
