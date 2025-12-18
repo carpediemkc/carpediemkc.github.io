@@ -983,7 +983,7 @@
 
         const InvestmentPlanView = ({ onBack, totalAssets }) => {
             const plans = [
-                { id: 1, title: '定期定投 (DCA)', status: 'Active', desc: '每月逢低主动定投￥2,000', icon: RefreshCwIcon, color: '#10b981', type: 'Strategy' },
+                { id: 1, title: '定期定投 (DCA)', status: 'Active', desc: '每月逢低主动定投 (BTC/ETH/ADA)', icon: RefreshCwIcon, color: '#10b981', type: 'Strategy' },
                 { id: 2, title: '核心-卫星策略', status: 'Active', desc: '核心持有 (BTC/ETH/Stock), 卫星博弈 (Meme/Alts)', icon: ActivityIcon, color: '#3b82f6', type: 'Allocation' },
                 { id: 3, title: '现金流管理', status: 'Review', desc: '确保预留 12 个月生活备用金', icon: CashLogo, color: '#f59e0b', type: 'Risk' },
             ];
@@ -1016,21 +1016,32 @@
             // 全新的编辑状态管理
             const [editingTask, setEditingTask] = useState(null); // 存储正在编辑的整个对象
 
-            // 4. 定投进度也加上持久化保存
-            const [dcaAmount, setDcaAmount] = useState(() => {
+            // --- 新增：DCA 多资产配置 ---
+            const DCA_CONFIG = {
+                btc: { name: 'BTC', target: 2000, color: '#F7931A' },
+                eth: { name: 'ETH', target: 500, color: '#627EEA' },
+                ada: { name: 'ADA', target: 500, color: '#0033AD' }
+            };
+
+            // 4. 定投进度改为对象结构并持久化
+            const [dcaProgress, setDcaProgress] = useState(() => {
                 try {
-                    const saved = localStorage.getItem('felix_dashboard_dca');
-                    return saved ? parseFloat(saved) : 2100;
+                    const saved = localStorage.getItem('felix_dashboard_dca_v2');
+                    // 如果读取到的是旧的数字格式，或者没有数据，则使用默认对象
+                    if (saved && saved.startsWith('{')) {
+                        return JSON.parse(saved);
+                    }
+                    return { btc: 0, eth: 0, ada: 0 };
                 } catch (e) {
-                    return 2100;
+                    return { btc: 0, eth: 0, ada: 0 };
                 }
             });
 
             useEffect(() => {
-                localStorage.setItem('felix_dashboard_dca', dcaAmount.toString());
-            }, [dcaAmount]);
+                localStorage.setItem('felix_dashboard_dca_v2', JSON.stringify(dcaProgress));
+            }, [dcaProgress]);
 
-            const [dcaInput, setDcaInput] = useState("");
+            const [dcaInputs, setDcaInputs] = useState({ btc: "", eth: "", ada: "" });
             const [isEditingDca, setIsEditingDca] = useState(false);
 
             const toggleTask = (id) => {
@@ -1082,13 +1093,39 @@
                 }
             };
             
+            // 开始编辑定投
+            const startEditingDca = () => {
+                if (isEditingDca) return;
+                setDcaInputs({
+                    btc: dcaProgress.btc.toString(),
+                    eth: dcaProgress.eth.toString(),
+                    ada: dcaProgress.ada.toString()
+                });
+                setIsEditingDca(true);
+            };
+
+            // 更新定投数据
             const handleUpdateDca = () => {
-                const amount = parseFloat(dcaInput);
-                if (!isNaN(amount)) {
-                    setDcaAmount(amount);
-                    setDcaInput("");
-                    setIsEditingDca(false);
+                const newProgress = { ...dcaProgress };
+                let hasChange = false;
+
+                Object.keys(DCA_CONFIG).forEach(key => {
+                    const val = parseFloat(dcaInputs[key]);
+                    if (!isNaN(val)) {
+                        newProgress[key] = val;
+                        hasChange = true;
+                    }
+                });
+
+                if (hasChange) {
+                    setDcaProgress(newProgress);
                 }
+                setIsEditingDca(false);
+            };
+
+            // 处理输入框变化
+            const handleDcaInputChange = (key, value) => {
+                setDcaInputs(prev => ({ ...prev, [key]: value }));
             };
 
             return (
@@ -1126,49 +1163,65 @@
                                                 </div>
                                             </div>
                                             
-                                            {/* DCA Progress Section - Only for DCA Plan (id 1) */}
+                                            {/* DCA Progress Section - Modified for 3 Bars */}
                                             {plan.id === 1 && (
-                                                <div className="mt-2 bg-[#13132B]/60 rounded-xl p-4 border border-white/5 transition-colors hover:border-white/10">
+                                                <div className="mt-4 bg-[#13132B]/60 rounded-xl p-4 border border-white/5 transition-colors hover:border-white/10">
                                                     <div 
-                                                        className="cursor-pointer" 
-                                                        onClick={() => !isEditingDca && setIsEditingDca(true)}
+                                                        className="cursor-pointer space-y-4" 
+                                                        onClick={startEditingDca}
                                                         title="点击修改进度"
                                                     >
-                                                        <div className="flex justify-between text-xs text-slate-400 mb-2 font-mono">
-                                                            <span>本月定投进度 (Monthly Progress)</span>
-                                                            <span className="text-emerald-400 font-bold">¥{dcaAmount} / ¥2000</span>
-                                                        </div>
-                                                        <div className="w-full bg-white/10 rounded-full h-2 mb-2 overflow-hidden">
-                                                            <div 
-                                                                className="bg-emerald-500 h-full rounded-full transition-all duration-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]" 
-                                                                style={{ width: `${Math.min((dcaAmount / 2000) * 100, 100)}%` }}
-                                                            />
-                                                        </div>
+                                                        {Object.entries(DCA_CONFIG).map(([key, config]) => {
+                                                            const currentVal = dcaProgress[key] || 0;
+                                                            const pct = Math.min((currentVal / config.target) * 100, 100);
+                                                            
+                                                            return (
+                                                                <div key={key}>
+                                                                    <div className="flex justify-between text-xs text-slate-400 mb-1 font-mono">
+                                                                        <span style={{ color: config.color }} className="font-bold">{config.name} 进度</span>
+                                                                        <span className="text-white">¥{currentVal} / ¥{config.target}</span>
+                                                                    </div>
+                                                                    <div className="w-full bg-white/10 rounded-full h-1.5 overflow-hidden">
+                                                                        <div 
+                                                                            className="h-full rounded-full transition-all duration-500" 
+                                                                            style={{ width: `${pct}%`, backgroundColor: config.color, boxShadow: `0 0 8px ${config.color}80` }}
+                                                                        />
+                                                                    </div>
+                                                                </div>
+                                                            );
+                                                        })}
                                                     </div>
 
                                                     {isEditingDca && (
-                                                        <div className="flex gap-2 mt-3 animate-in fade-in slide-in-from-top-1 duration-200">
-                                                            <input 
-                                                                type="number" 
-                                                                value={dcaInput}
-                                                                onChange={(e) => setDcaInput(e.target.value)}
-                                                                placeholder="输入本月已投金额..." 
-                                                                className="bg-[#0A0A1F] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white flex-1 focus:outline-none focus:border-emerald-500 transition-colors"
-                                                                onKeyDown={(e) => e.key === 'Enter' && handleUpdateDca()}
-                                                                autoFocus
-                                                            />
-                                                            <button 
-                                                                onClick={() => setIsEditingDca(false)}
-                                                                className="px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
-                                                            >
-                                                                取消
-                                                            </button>
-                                                            <button 
-                                                                onClick={handleUpdateDca}
-                                                                className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-1.5 rounded-lg transition-colors font-medium shadow-lg shadow-emerald-500/20"
-                                                            >
-                                                                更新
-                                                            </button>
+                                                        <div className="mt-4 pt-4 border-t border-white/10 animate-in fade-in slide-in-from-top-2 duration-200 grid gap-3">
+                                                            <div className="grid grid-cols-3 gap-2">
+                                                                {Object.entries(DCA_CONFIG).map(([key, config]) => (
+                                                                    <div key={key} className="flex flex-col gap-1">
+                                                                        <label className="text-[10px] text-slate-500" style={{color: config.color}}>{config.name}</label>
+                                                                        <input 
+                                                                            type="number" 
+                                                                            value={dcaInputs[key]}
+                                                                            onChange={(e) => handleDcaInputChange(key, e.target.value)}
+                                                                            className="bg-[#0A0A1F] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white focus:outline-none focus:border-emerald-500 transition-colors w-full"
+                                                                            placeholder="¥0"
+                                                                        />
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            <div className="flex justify-end gap-2 mt-1">
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); setIsEditingDca(false); }}
+                                                                    className="px-3 py-1.5 rounded-lg text-xs text-slate-400 hover:text-white hover:bg-white/5 transition-colors"
+                                                                >
+                                                                    取消
+                                                                </button>
+                                                                <button 
+                                                                    onClick={(e) => { e.stopPropagation(); handleUpdateDca(); }}
+                                                                    className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs px-4 py-1.5 rounded-lg transition-colors font-medium shadow-lg shadow-emerald-500/20"
+                                                                >
+                                                                    保存更新
+                                                                </button>
+                                                            </div>
                                                         </div>
                                                     )}
                                                 </div>
