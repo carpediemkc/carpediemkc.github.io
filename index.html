@@ -113,7 +113,7 @@
         );
 
         const SparklesIcon = (props) => (
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z" /><path d="M5 3v4" /><path d="M9 17v4" /><path d="M3 21h4" /></svg>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L12 3Z" /><path d="M5 3v4" /><path d="M9 17v4" /><path d="M3 21h4" /></svg>
         );
 
         const Loader2Icon = (props) => (
@@ -336,25 +336,80 @@
         };
 
         // --- NEW: LockScreen Component (Updated for Security & Stability) ---
-        // Obfuscated check for '' to avoid plain text in source
-        // Using Base64 (btoa) for maximum compatibility across all environments (file://, http, https)
-        // '' -> Base64 -> 'MTU3MzkyMQ=='
-        const TARGET_SECRET = "MTU3MzkyMQ==";
+        // Double Hashing Strategy:
+        // 1. Primary: SHA-256 (High Security, requires Secure Context like HTTPS)
+        // 2. Fallback: Custom DJB2-like Hash (Obfuscated, works in local file://)
+        // Original Password: '你猜'
+        
+        const TARGET_HASH_SHA256 = "189bbbb00c5f1fb7fba9ad9285f193d119ee761d46cb05e830e0129757659a22";
+        const TARGET_HASH_FALLBACK = "2107721784";
+
+        // A simple, non-reversible hash function for environments without crypto API
+        const simpleHash = (str) => {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                // ((hash << 5) - hash) + char is equivalent to hash * 31 + char
+                hash = ((hash << 5) - hash) + char;
+                hash = hash | 0; // Convert to 32bit integer
+            }
+            return hash.toString();
+        };
 
         const LockScreen = ({ onUnlock }) => {
             const [password, setPassword] = useState('');
             const [error, setError] = useState(false);
             const [shake, setShake] = useState(false);
 
-            const handleUnlock = () => {
+            const handleUnlock = async () => {
+                // Remove whitespace to avoid accidental errors
+                const cleanPassword = password.trim();
+                
+                if (!cleanPassword) {
+                    setError(true);
+                    setShake(true);
+                    setTimeout(() => setShake(false), 500);
+                    return;
+                }
+
                 try {
-                    // Encode input to Base64 and compare
-                    if (btoa(password) === TARGET_SECRET) {
+                    let isCorrect = false;
+
+                    // 1. Try Secure SHA-256 Validation
+                    // This relies on the browser's crypto API
+                    if (window.crypto && window.crypto.subtle) {
+                        try {
+                            const encoder = new TextEncoder();
+                            const data = encoder.encode(cleanPassword);
+                            const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+                            const hashArray = Array.from(new Uint8Array(hashBuffer));
+                            const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+
+                            if (hashHex === TARGET_HASH_SHA256) {
+                                isCorrect = true;
+                            }
+                        } catch (cryptoError) {
+                            console.warn("SHA-256 validation skipped (context limitation), trying fallback...", cryptoError);
+                        }
+                    } 
+                    
+                    // 2. Fallback / Redundancy Check
+                    // If SHA-256 didn't run (e.g., insecure context) or didn't match, check the fallback hash.
+                    // This is much more secure than Base64 because it uses bitwise math to create a one-way signature.
+                    if (!isCorrect) {
+                        if (simpleHash(cleanPassword) === TARGET_HASH_FALLBACK) {
+                            isCorrect = true;
+                        }
+                    }
+                    
+                    if (isCorrect) {
                         onUnlock();
                     } else {
                         throw new Error('Incorrect password');
                     }
+
                 } catch (e) {
+                    console.error("Unlock failed", e);
                     setError(true);
                     setShake(true);
                     setTimeout(() => setShake(false), 500);
@@ -1464,7 +1519,7 @@
                             if (asset.id === 'cash') return asset;
                             const change = 1 + (Math.random() - 0.5) * volatility;
                             const mockChange24h = (Math.random() * 4 - 2);
-                            return { ...asset, basePrice: asset.basePrice * change, priceUsd: asset.priceUsd ? asset.priceUsd * change : undefined, change24h: mockChange24h };
+                            return { ...asset, basePrice: asset.basePrice * change, priceUsd: asset.priceUsd ? asset.priceUsd : undefined, change24h: mockChange24h };
                         });
                         return { ...prev, usStocks: simulate(prev.usStocks, 0.001), aShares: isStockFetchSuccess ? prev.aShares : simulate(prev.aShares, 0.002) };
                     });
