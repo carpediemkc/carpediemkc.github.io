@@ -564,7 +564,7 @@
                                 // FIXED: Strictly check for undefined/null so that 0 is treated as a valid value
                                 const change = (asset.change24h !== undefined && asset.change24h !== null) 
                                     ? asset.change24h 
-                                    : (Math.random() * 2 - 1);
+                                    : 0;
                                 
                                 const isPositive = change >= 0;
                                 const isCrypto = asset.type === 'Crypto';
@@ -1890,6 +1890,9 @@
                         // Create new script tag
                         const script = document.createElement('script');
                         script.id = scriptId;
+                        
+                        // Use explicit qt.gtimg.cn URL with random timestamp to prevent caching
+                        // Format: http://qt.gtimg.cn/q=sh510300,sh512660,...
                         script.src = `https://qt.gtimg.cn/q=${codesArray.join(',')}&t=${new Date().getTime()}`;
                         
                         // Define callback for when script loads
@@ -1897,23 +1900,31 @@
                             isStockFetchSuccess = true;
                             setPortfolios(prev => {
                                 const updateStocks = (assets) => assets.map(asset => {
+                                    // Skip items that are not stock codes (e.g. 'cash')
                                     const stockCode = codeMap[asset.id]; // e.g., 'sh510300'
+                                    if (!stockCode) return asset;
+
                                     // Tencent returns data in global variables named v_sh510300
                                     const dataStr = window[`v_${stockCode}`]; 
                                     
                                     if (dataStr) {
-                                        // Format: "1~Name~Code~Price~LastClose~Open~..."
-                                        // Index 3: Current Price
-                                        // Index 32: Change Percent (e.g., 1.5 for 1.5%)
+                                        // Standard format (indices based on ~ split):
+                                        // 3: Current Price
+                                        // 31: Change Amount
+                                        // 32: Change Percent (e.g. 1.52 for 1.52%)
                                         const params = dataStr.split('~');
                                         if (params.length > 30) {
                                             const newPrice = parseFloat(params[3]);
-                                            const newChange = parseFloat(params[32]);
+                                            const newChangePct = parseFloat(params[32]);
                                             
+                                            // Ensure we have valid numbers before updating
+                                            const isValidPrice = !isNaN(newPrice) && newPrice > 0;
+                                            const isValidChange = !isNaN(newChangePct);
+
                                             return { 
                                                 ...asset, 
-                                                basePrice: (newPrice > 0) ? newPrice : asset.basePrice, 
-                                                change24h: !isNaN(newChange) ? newChange : 0 
+                                                basePrice: isValidPrice ? newPrice : asset.basePrice, 
+                                                change24h: isValidChange ? newChangePct : 0 
                                             };
                                         }
                                     }
@@ -1921,9 +1932,6 @@
                                 });
                                 return { ...prev, aShares: updateStocks(prev.aShares) };
                             });
-
-                            // Cleanup global variables to keep window clean
-                            codesArray.forEach(c => { try { delete window[`v_${c}`]; } catch(e) { window[`v_${c}`] = undefined; } });
                         };
 
                         script.onerror = () => { console.warn("Tencent Stock API failed to load"); };
