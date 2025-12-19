@@ -242,6 +242,7 @@
             { id: 'tether', name: 'USDT', amount: 619.41023794, basePrice: 7.2, symbol: 'USDT', color: '#26A17B', logo: 'https://cryptologos.cc/logos/tether-usdt-logo.svg?v=035' },
             { id: 'dai', name: 'DAI', amount: 1341.96, basePrice: 7.2, symbol: 'DAI', color: '#F5A623', logo: 'https://cryptologos.cc/logos/multi-collateral-dai-dai-logo.svg?v=040' },
             { id: 'wkey', name: 'Wkey', amount: 14.748, basePrice: 71.53635, priceUsd: 9.93, symbol: 'wkeydao', color: '#E60012', logo: 'https://coinstats.app/_next/image/?url=https%3A%2F%2Fstatic.coinstats.app%2Fcoins%2F0x194b302a4b0a79795fb68e2adf1b8c9ec5ff8d1f_binance_smartBTe.png&w=48&q=75' },
+            { id: 'lgns', name: 'LGNS', amount: 10000, basePrice: 0, priceUsd: 0, symbol: 'LGNS', color: '#9A2B2B', logo: 'https://www.bing.com/th/id/OIP.UBF3ANW52CHjcei4opp61gAAAA?w=165&h=176&c=7&r=0&o=7&cb=ucfimgc2&pid=1.7&rm=3' },
         ];
 
         const INITIAL_CASH_DATA = [
@@ -1968,11 +1969,6 @@
                                     const dataStr = window[varName];
                                     
                                     if (dataStr) {
-                                        // Sina US Stock Format (Comma separated):
-                                        // Index 0: Name (e.g., Apple Inc)
-                                        // Index 1: Current Price (USD)
-                                        // Index 2: Change Percent (e.g., 3.34 for +3.34%)
-                                        // Index 3: Timestamp
                                         const params = dataStr.split(',');
                                         
                                         if (params.length > 3) {
@@ -2001,39 +1997,54 @@
                         document.body.appendChild(script);
                     } catch (e) { console.warn("US Stock API failed", e); }
 
-                    // 5. Fetch Specific Token (WKey) via DexScreener
+                    // 5. Fetch Specific Token (WKey, LGNS) via DexScreener
                     try {
-                        const tokenAddress = "0x194b302a4b0a79795fb68e2adf1b8c9ec5ff8d1f";
-                        const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`);
+                        const wkeyAddr = "0x194b302a4b0a79795fb68e2adf1b8c9ec5ff8d1f";
+                        const lgnsAddr = "0xeb51d9a39ad5eef215dc0bf39a8821ff804a0f01";
+                        // DexScreener allows fetching multiple tokens by comma-separated addresses
+                        const response = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${wkeyAddr},${lgnsAddr}`);
                         
                         if (response.ok) {
                             const data = await response.json();
                             if (data.pairs && data.pairs.length > 0) {
-                                // DexScreener returns pairs sorted by liquidity usually. We take the top one.
-                                const pair = data.pairs[0];
-                                const priceUsd = parseFloat(pair.priceUsd);
-                                const change24h = pair.priceChange.h24;
-
                                 setPortfolios(prev => {
                                     // Calculate dynamic exchange rate
                                     const usdtAsset = prev.felix.find(a => a.id === 'tether') || prev.jiamin.find(a => a.id === 'tether');
                                     const exchangeRate = usdtAsset ? usdtAsset.basePrice : 7.25;
 
-                                    const updateWkey = (assets) => assets.map(asset => {
+                                    const updateDexTokens = (assets) => assets.map(asset => {
+                                        // Find data for WKey
                                         if (asset.id === 'wkey') {
-                                            return {
-                                                ...asset,
-                                                priceUsd: priceUsd,
-                                                basePrice: priceUsd * exchangeRate,
-                                                change24h: change24h
-                                            };
+                                            const pair = data.pairs.find(p => p.baseToken.address.toLowerCase() === wkeyAddr.toLowerCase());
+                                            if (pair) {
+                                                const priceUsd = parseFloat(pair.priceUsd);
+                                                return {
+                                                    ...asset,
+                                                    priceUsd: priceUsd,
+                                                    basePrice: priceUsd * exchangeRate,
+                                                    change24h: pair.priceChange.h24
+                                                };
+                                            }
+                                        }
+                                        // Find data for LGNS
+                                        if (asset.id === 'lgns') {
+                                            const pair = data.pairs.find(p => p.baseToken.address.toLowerCase() === lgnsAddr.toLowerCase());
+                                            if (pair) {
+                                                const priceUsd = parseFloat(pair.priceUsd);
+                                                return {
+                                                    ...asset,
+                                                    priceUsd: priceUsd,
+                                                    basePrice: priceUsd * exchangeRate,
+                                                    change24h: pair.priceChange.h24
+                                                };
+                                            }
                                         }
                                         return asset;
                                     });
 
                                     return { 
                                         ...prev, 
-                                        jiamin: updateWkey(prev.jiamin) 
+                                        jiamin: updateDexTokens(prev.jiamin) 
                                     };
                                 });
                             }
