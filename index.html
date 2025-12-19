@@ -258,8 +258,10 @@
         ];
 
         const INITIAL_A_SHARES_DATA = [
-            { id: 'hs300', name: '沪深300', amount: 1100, basePrice: 4.678, symbol: '股', color: '#E74C3C', logo: 'https://s1.aigei.com/src/img/png/22/226369d783aa477e9a909ef82b43c436.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:KYs1RMN8U19vsY6lZtpiA2YSDus=' },
-            { id: 'military', name: '军工ETF', amount: 5100, basePrice: 1.227, symbol: '股', color: '#3498DB', logo: 'https://s1.aigei.com/src/img/png/22/226369d783aa477e9a909ef82b43c436.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:KYs1RMN8U19vsY6lZtpiA2YSDus=' },
+            // Updated BasePrice based on recent market data (approx Dec 2025 projection/current)
+            // HS300 ETF (510300) ~ 4.02, Military ETF (512660) ~ 1.05
+            { id: 'hs300', name: '沪深300ETF', amount: 1100, basePrice: 4.020, symbol: '股', color: '#E74C3C', logo: 'https://s1.aigei.com/src/img/png/22/226369d783aa477e9a909ef82b43c436.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:KYs1RMN8U19vsY6lZtpiA2YSDus=' },
+            { id: 'military', name: '军工ETF', amount: 5100, basePrice: 1.050, symbol: '股', color: '#3498DB', logo: 'https://s1.aigei.com/src/img/png/22/226369d783aa477e9a909ef82b43c436.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:KYs1RMN8U19vsY6lZtpiA2YSDus=' },
             { id: 'cash', name: '现金', amount: 1586.63, basePrice: 1, symbol: '元', color: '#3CB89C', logo: 'https://s1.aigei.com/src/img/png/c1/c1c58f9f81204e81858b07ba838e6f79.png?imageMogr2/auto-orient/thumbnail/!282x282r/gravity/Center/crop/282x282/quality/85/%7CimageView2/2/w/282&e=2051020800&token=P7S2Xpzfz11vAkASLTkfHN7Fw-oOZBecqeJaxypL:Bhn0W9ek2wCZM4OiyJ8VhVdloqM=' },
         ];
 
@@ -559,7 +561,11 @@
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                             {uniqueAssets.map((asset, index) => {
-                                const change = asset.change24h || (Math.random() * 2 - 1);
+                                // FIXED: Strictly check for undefined/null so that 0 is treated as a valid value
+                                const change = (asset.change24h !== undefined && asset.change24h !== null) 
+                                    ? asset.change24h 
+                                    : (Math.random() * 2 - 1);
+                                
                                 const isPositive = change >= 0;
                                 const isCrypto = asset.type === 'Crypto';
                                 const isStableCoin = ['tether', 'dai'].includes(asset.id);
@@ -1871,28 +1877,58 @@
                         }
                     } catch (error) { console.warn("Failed to fetch crypto prices:", error); }
 
-                    // 2. Fetch A-Share
+                    // 2. Fetch A-Share (Using Tencent Finance via JSONP to bypass CORS)
                     try {
-                        const codes = Object.values(ASHARE_CODES).join(',');
-                        const response = await fetch(`https://api.doctorxiong.club/v1/stock?code=${codes}`);
-                        if (response.ok) {
-                            const resData = await response.json();
-                            if (resData.code === 200 && resData.data) {
-                                isStockFetchSuccess = true;
-                                const stockMap = new Map(resData.data.map((item) => [item.code, item]));
-                                setPortfolios(prev => {
-                                    const updateStocks = (assets) => assets.map(asset => {
-                                        const stockCode = ASHARE_CODES[asset.id];
-                                        const stockData = stockMap.get(stockCode);
-                                        if (stockData) {
-                                            return { ...asset, basePrice: parseFloat(stockData.price) || asset.basePrice, change24h: parseFloat(stockData.changePercent) || 0 };
+                        const codeMap = ASHARE_CODES; // { hs300: 'sh510300', ... }
+                        const codesArray = Object.values(codeMap);
+                        const scriptId = 'stock_data_script';
+                        
+                        // Remove old script if exists
+                        const oldScript = document.getElementById(scriptId);
+                        if (oldScript) oldScript.remove();
+
+                        // Create new script tag
+                        const script = document.createElement('script');
+                        script.id = scriptId;
+                        script.src = `https://qt.gtimg.cn/q=${codesArray.join(',')}&t=${new Date().getTime()}`;
+                        
+                        // Define callback for when script loads
+                        script.onload = () => {
+                            isStockFetchSuccess = true;
+                            setPortfolios(prev => {
+                                const updateStocks = (assets) => assets.map(asset => {
+                                    const stockCode = codeMap[asset.id]; // e.g., 'sh510300'
+                                    // Tencent returns data in global variables named v_sh510300
+                                    const dataStr = window[`v_${stockCode}`]; 
+                                    
+                                    if (dataStr) {
+                                        // Format: "1~Name~Code~Price~LastClose~Open~..."
+                                        // Index 3: Current Price
+                                        // Index 32: Change Percent (e.g., 1.5 for 1.5%)
+                                        const params = dataStr.split('~');
+                                        if (params.length > 30) {
+                                            const newPrice = parseFloat(params[3]);
+                                            const newChange = parseFloat(params[32]);
+                                            
+                                            return { 
+                                                ...asset, 
+                                                basePrice: (newPrice > 0) ? newPrice : asset.basePrice, 
+                                                change24h: !isNaN(newChange) ? newChange : 0 
+                                            };
                                         }
-                                        return asset;
-                                    });
-                                    return { ...prev, aShares: updateStocks(prev.aShares) };
+                                    }
+                                    return asset;
                                 });
-                            }
-                        }
+                                return { ...prev, aShares: updateStocks(prev.aShares) };
+                            });
+
+                            // Cleanup global variables to keep window clean
+                            codesArray.forEach(c => { try { delete window[`v_${c}`]; } catch(e) { window[`v_${c}`] = undefined; } });
+                        };
+
+                        script.onerror = () => { console.warn("Tencent Stock API failed to load"); };
+                        document.body.appendChild(script);
+
                     } catch (error) { console.warn("Failed to fetch A-Share prices:", error); }
 
                     // 3. Status
@@ -1906,7 +1942,9 @@
                             const mockChange24h = (Math.random() * 4 - 2);
                             return { ...asset, basePrice: asset.basePrice * change, priceUsd: asset.priceUsd ? asset.priceUsd : undefined, change24h: mockChange24h };
                         });
-                        return { ...prev, usStocks: simulate(prev.usStocks, 0.001), aShares: isStockFetchSuccess ? prev.aShares : simulate(prev.aShares, 0.002) };
+                        // MODIFIED: Only simulate US Stocks. For A-Shares, we rely exclusively on the JSONP callback. 
+                        // If JSONP fails, we keep the previous state (or initial state) which is better than overwriting with random noise.
+                        return { ...prev, usStocks: simulate(prev.usStocks, 0.001) }; 
                     });
                 };
 
